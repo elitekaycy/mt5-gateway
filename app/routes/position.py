@@ -301,8 +301,8 @@ def modify_sl_tp_endpoint():
             "action": mt5.TRADE_ACTION_SLTP,
             "symbol": symbol,
             "position": position,
-            "sl": sl if sl is not None else 0.0,
-            "tp": tp if tp is not None else 0.0,
+            "sl": float(sl) if sl is not None else 0.0,
+            "tp": float(tp) if tp is not None else 0.0,
         }
 
         result = mt5.order_send(request_data)

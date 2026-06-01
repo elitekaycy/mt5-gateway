@@ -33,10 +33,12 @@ if [ -n "${MT5_LOGIN:-}" ]; then
     # Headless env login. Seed the broker directory if the volume lacks it —
     # wine-in-docker can't discover brokers, so the server can't resolve without it.
     mkdir -p "$mt5cfg"
-    if [ ! -s "$sdat" ] && [ -s /defaults/servers.dat ]; then
+    # Always overwrite: the MT5 install writes a default servers.dat with no
+    # broker directory, so the bundled one must win or the server won't resolve.
+    if [ -s /defaults/servers.dat ]; then
         cp /defaults/servers.dat "$sdat"
         chown abc:abc "$sdat" 2>/dev/null || true
-        log_message "INFO" "Seeded servers.dat from /defaults."
+        log_message "INFO" "Seeded servers.dat from /defaults ($(wc -c < "$sdat") bytes)."
     fi
     # Render the startup-config ini (login + AllowLiveTrading) and launch with it.
     log_message "INFO" "Env-login: writing start.ini and launching terminal with /config:."

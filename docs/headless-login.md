@@ -24,11 +24,24 @@ login, unchanged.
 On any login failure the gateway falls back to attaching to the persisted volume,
 logs the error, and reports `/health/ready` 503 until connected.
 
-## servers.dat
+## servers.dat (broker directory)
 
-`servers.dat` is MetaQuotes proprietary data — not committed. Provide it before
-build (see [`defaults/README.md`](../defaults/README.md)). The ~728 KB default
-directory covers the major brokers; refresh once per exotic broker.
+`servers.dat` is MetaQuotes proprietary data — not committed, and (for a public
+image) not baked. Headless login needs it so the terminal can resolve the broker
+(wine-in-docker can't discover brokers). Provide it any of three ways:
+
+1. **Runtime mount** — `-v /path/servers.dat:/defaults/servers.dat:ro`. The boot
+   copies it into the MT5 config. Keeps the image clean.
+2. **Private artifacts fetch** — set `QKT_ARTIFACTS_TOKEN` (read-only PAT); the
+   gateway pulls `servers.dat` from `QKT_ARTIFACTS_REPO` on first boot and
+   persists it to the volume. Opt-in: empty token skips it, so the public image
+   and the open path are unaffected.
+3. **Build bake** — drop `defaults/servers.dat` before `docker build` (only for a
+   *private* image; a public image would expose it).
+
+Without any of these, leave `MT5_LOGIN` empty and use the one-time VNC login,
+which caches `servers.dat` in the volume itself. The ~728 KB directory covers the
+major brokers; refresh once per exotic broker.
 
 ## Verify
 

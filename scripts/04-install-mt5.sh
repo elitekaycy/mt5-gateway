@@ -33,12 +33,33 @@ if [ -n "${MT5_LOGIN:-}" ]; then
     # Headless env login. Seed the broker directory if the volume lacks it —
     # wine-in-docker can't discover brokers, so the server can't resolve without it.
     mkdir -p "$mt5cfg"
-    # Always overwrite: the MT5 install writes a default servers.dat with no
-    # broker directory, so the bundled one must win or the server won't resolve.
+    # Provision the broker directory (servers.dat) so the terminal can resolve
+    # the server — wine-in-docker can't discover brokers on its own.
     if [ -s /defaults/servers.dat ]; then
+        # Operator-provided (baked into image, or a runtime mount) — authoritative.
         cp /defaults/servers.dat "$sdat"
         chown abc:abc "$sdat" 2>/dev/null || true
         log_message "INFO" "Seeded servers.dat from /defaults ($(wc -c < "$sdat") bytes)."
+    else
+        # Opt-in fetch from a private artifacts repo. Only when the volume lacks a
+        # real directory (the MT5 install writes a tiny default), and only if a
+        # token is set — so the public image stays clean and the open VNC /
+        # user-supplied-servers.dat path is unaffected when no token is given.
+        # Writes straight into the volume, so later boots don't refetch.
+        cur=$([ -f "$sdat" ] && wc -c < "$sdat" || echo 0)
+        if [ "$cur" -lt 100000 ] && [ -n "${QKT_ARTIFACTS_TOKEN:-}" ]; then
+            repo="${QKT_ARTIFACTS_REPO:-elitekaycy/qkt-artifacts}"
+            path="${QKT_ARTIFACTS_FILE:-servers.dat}"
+            log_message "INFO" "Fetching servers.dat from private artifacts repo $repo."
+            if curl -fsSL -H "Authorization: Bearer ${QKT_ARTIFACTS_TOKEN}" \
+                    -H "Accept: application/vnd.github.raw" \
+                    "https://api.github.com/repos/${repo}/contents/${path}" -o "$sdat"; then
+                chown abc:abc "$sdat" 2>/dev/null || true
+                log_message "INFO" "Fetched servers.dat ($(wc -c < "$sdat") bytes)."
+            else
+                log_message "WARN" "servers.dat fetch failed; login may not resolve the broker."
+            fi
+        fi
     fi
     # Render the startup-config ini (login + AllowLiveTrading) and launch with it.
     log_message "INFO" "Env-login: writing start.ini and launching terminal with /config:."

@@ -9,6 +9,11 @@ services:
       - default
     env_file:
       - .env
+    environment:
+      # Headless env login (optional). Empty -> manual VNC flow + persisted volume.
+      MT5_LOGIN: ${MT5_LOGIN:-}
+      MT5_PASSWORD: ${MT5_PASSWORD:-}
+      MT5_SERVER: ${MT5_SERVER:-}
     restart: unless-stopped
     ports:
       - "3000:3000"

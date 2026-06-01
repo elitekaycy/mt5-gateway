@@ -24,6 +24,8 @@ Based on [slowfound's metatrader5-quant-server-python](https://github.com/slowfo
 
 4. **Important**: Connect to VNC at `localhost:3000` using your VNC password. Login to MT5 with your broker account through the GUI. The API endpoints won't work until you're logged in.
 
+   **Or skip the GUI:** set `MT5_LOGIN` / `MT5_PASSWORD` / `MT5_SERVER` in `.env` (and provide `defaults/servers.dat`) — the gateway logs in on boot, no VNC. See [docs/headless-login.md](docs/headless-login.md). VNC stays available for diagnostics.
+
 5. API is now available at `http://localhost:5001`
 
 ## Ports

@@ -18,7 +18,10 @@ pass=0
 for i in $(seq 1 "$iters"); do
   echo "── boot $i/$iters ──"
   docker compose down -v >/dev/null 2>&1 || true
-  rm -rf ./config && mkdir -p ./config
+  # ./config is a bind mount written by the container's uid 911 — wipe via a
+  # root container so the host user's rm doesn't hit permission errors.
+  docker run --rm -v "$PWD/config":/c alpine sh -c 'find /c -mindepth 1 -delete' >/dev/null 2>&1 || true
+  mkdir -p ./config
   docker compose up -d --build >/dev/null
 
   ready=""

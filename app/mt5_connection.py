@@ -9,6 +9,24 @@ import MetaTrader5 as mt5
 
 logger = logging.getLogger(__name__)
 
+# Serialize every mt5.order_send call across the waitress worker pool. The
+# MT5 Python DLL is not thread-safe: two concurrent order_send invocations on
+# different waitress threads caused the second to return None (observed
+# reproducibly on Exness demo SELL-after-BUY straddle legs, zero failures
+# after this lock was added).
+_ORDER_SEND_LOCK = Lock()
+_original_order_send = mt5.order_send
+
+def _locked_order_send(request):
+    with _ORDER_SEND_LOCK:
+        result = _original_order_send(request)
+        if result is None:
+            err = mt5.last_error()
+            logger.error(f"mt5.order_send returned None - last_error={err}")
+        return result
+
+mt5.order_send = _locked_order_send
+
 
 class ConnectionStatus(Enum):
     DISCONNECTED = "disconnected"

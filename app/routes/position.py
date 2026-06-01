@@ -286,20 +286,33 @@ def modify_sl_tp_endpoint():
         sl = data.get("sl")
         tp = data.get("tp")
 
+        # Resolve symbol — MT5 order_send(TRADE_ACTION_SLTP) requires it.
+        # Accept from request body, or look up from open position.
+        symbol = data.get("symbol")
+        if not symbol:
+            pos_info = mt5.positions_get(ticket=position)
+            if pos_info and len(pos_info) > 0:
+                symbol = pos_info[0].symbol
+            else:
+                logger.error(f"Position {position} not found for SL/TP modify")
+                return validation_error_response(f"Position {position} not found")
+
         request_data = {
             "action": mt5.TRADE_ACTION_SLTP,
+            "symbol": symbol,
             "position": position,
-            "sl": sl,
-            "tp": tp,
+            "sl": float(sl) if sl is not None else 0.0,
+            "tp": float(tp) if tp is not None else 0.0,
         }
 
         result = mt5.order_send(request_data)
 
         if result is None:
+            last_err = mt5.last_error()
             logger.error(
-                f"order_send returned None for modify SL/TP position {position}"
+                f"order_send returned None for modify SL/TP position {position}, last_error={last_err}"
             )
-            return validation_error_response("Modify SL/TP failed - MT5 returned None")
+            return validation_error_response(f"Modify SL/TP failed - MT5 returned None, last_error={last_err}")
 
         if result.retcode != mt5.TRADE_RETCODE_DONE:
             return mt5_error_response("Modify SL/TP", result)

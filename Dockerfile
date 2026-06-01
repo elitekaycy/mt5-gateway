@@ -53,6 +53,10 @@ FROM base
 
 # Copy application files and scripts
 COPY app /app
+# Broker directory for headless env login (defaults/servers.dat is gitignored;
+# provide it before build). The dir always has README.md so this COPY succeeds
+# whether or not servers.dat is present.
+COPY defaults/ /defaults/
 COPY scripts /scripts
 RUN dos2unix /scripts/*.sh && \
   chmod +x /scripts/*.sh

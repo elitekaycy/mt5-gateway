@@ -41,3 +41,12 @@ wheels/
 # OS files
 .DS_Store
 Thumbs.db
+
+# MetaQuotes proprietary broker directory — provide at build, never commit
+defaults/servers.dat
+
+# pytest
+.pytest_cache/
+
+# local test credentials
+.demo.env

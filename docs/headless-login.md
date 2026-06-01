@@ -26,22 +26,20 @@ logs the error, and reports `/health/ready` 503 until connected.
 
 ## servers.dat (broker directory)
 
-`servers.dat` is MetaQuotes proprietary data — not committed, and (for a public
-image) not baked. Headless login needs it so the terminal can resolve the broker
-(wine-in-docker can't discover brokers). Provide it any of three ways:
+`servers.dat` is MT5's broker directory — server names + access-point addresses
+(**no credentials**). It ships **baked into the image** so any user logs in
+headlessly with just their creds; wine-in-docker can't discover brokers on its
+own, so it must be present. The ~728 KB default covers the major brokers (Exness,
+IC Markets, FTMO, Pepperstone, …).
 
-1. **Runtime mount** — `-v /path/servers.dat:/defaults/servers.dat:ro`. The boot
-   copies it into the MT5 config. Keeps the image clean.
-2. **Private artifacts fetch** — set `QKT_ARTIFACTS_TOKEN` (read-only PAT); the
-   gateway pulls `servers.dat` from `QKT_ARTIFACTS_REPO` on first boot and
-   persists it to the volume. Opt-in: empty token skips it, so the public image
-   and the open path are unaffected.
-3. **Build bake** — drop `defaults/servers.dat` before `docker build` (only for a
-   *private* image; a public image would expose it).
+Override it without rebuilding, in priority order:
 
-Without any of these, leave `MT5_LOGIN` empty and use the one-time VNC login,
-which caches `servers.dat` in the volume itself. The ~728 KB directory covers the
-major brokers; refresh once per exotic broker.
+1. **Runtime mount** — `-v /path/servers.dat:/defaults/servers.dat:ro`.
+2. **Private artifacts fetch** — set `QKT_ARTIFACTS_TOKEN` (read-only PAT) to pull
+   `servers.dat` from `QKT_ARTIFACTS_REPO` on first boot (persists to the volume).
+
+To refresh the baked copy, replace `defaults/servers.dat` and rebuild (see
+[`defaults/README.md`](../defaults/README.md)).
 
 ## Verify
 

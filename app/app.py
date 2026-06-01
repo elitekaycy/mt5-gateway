@@ -9,6 +9,7 @@ from flask import Flask
 from flask_cors import CORS
 from logging_config import configure_logging
 from middleware import RequestIDMiddleware
+from autologin import load_settings, validate
 from mt5_connection import MT5Connection
 from routes.account import account_bp
 from routes.data import data_bp
@@ -52,6 +53,11 @@ def shutdown_handler(signum=None, frame=None):
 signal.signal(signal.SIGTERM, shutdown_handler)
 signal.signal(signal.SIGINT, shutdown_handler)
 atexit.register(shutdown_handler)
+
+try:
+    validate(load_settings(os.environ))
+except ValueError as e:
+    logger.error(f"Invalid env-login config: {e}")
 
 conn = MT5Connection.get_instance()
 if not conn.initialize():

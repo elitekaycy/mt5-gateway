@@ -4,6 +4,47 @@ Date: 2026-05-31
 Status: approved, pre-implementation
 Scope: `mt5-gateway` (impl) + downstream deploy wiring (qkt-prod, qkt templates)
 
+## Update 2026-05-31 — verified recipe (supersedes Approaches/Design below where they differ)
+
+A live spike on the exact prod image digest (`elitekaycy/mt5-gateway-api@sha256:098e6a…`)
+with a throwaway Exness demo proved the working recipe and simplified the design:
+
+- **Mode B (startup-config ini) is the winner; mode A is dropped.** Mode A
+  (`mt5.initialize(login=…)`) returned `-10005 IPC timeout` from out-of-band
+  probes — a harness artifact (the MetaTrader5 Python IPC is single-client and
+  flask owns it). Mode B works cleanly through the real flask `/account`. So
+  the `MT5_AUTOLOGIN` toggle collapses to **on/off** (creds present or not) and
+  `mt5_connection.py` needs **no change** — it already does bare `initialize()`,
+  which attaches once the terminal is logged in.
+- **`servers.dat` seeding is REQUIRED, not optional.** wine-in-docker cannot do
+  MT5's broker *discovery* (documented gmag11/MetaTrader5-Docker limitation), so
+  a fresh volume can't resolve the broker server and login silently no-ops. With
+  `servers.dat` seeded (the ~728 KB broker directory), the start.ini login
+  authorizes headlessly with AutoTrading on. Verified: `/account` → login
+  436145944 on Exness-MT5Trial9, `trade_allowed` + `trade_expert` true, no VNC.
+- **No programmatic endpoint for broker server data exists.** Research confirmed
+  MetaQuotes treats it as proprietary; even MetaApi.cloud (commercial) requires
+  uploading `servers.dat` per broker. So bundling `servers.dat` is the industry
+  standard, not a hack. The `Server=address:port` startup option likely still
+  needs the server's pinned public key (in `servers.dat`) — not a "no-data" path.
+- **`servers.dat` is seeded privately, NOT committed.** It is MetaQuotes
+  proprietary data and the repo leans open-source. The boot script seeds it into
+  a fresh `/config` from `/defaults/servers.dat`, provided at deploy time (build
+  COPY from a gitignored artifact, or a runtime mount) — never a committed file.
+- **The 728 KB `servers.dat` is MT5's full default broker directory** — it
+  resolves Exness (proven) and almost certainly the other majors (IC Markets,
+  FTMO, Pepperstone). Adding an exotic broker is a one-time `servers.dat`
+  refresh, captured once, then headless forever.
+
+Env wiring (two parallel flows that never cross — gateway holds the secret, qkt
+holds the route): `.env MT5_LOGIN/PASSWORD/SERVER → gateway → start.ini → login`;
+`.env QKT_<BROKER>_URL → qkt.config.yaml brokers.<name>.gateway_url →
+MT5BrokerProfile → DSL "BROKER:SYMBOL" routes orders to that gateway`. One
+gateway container per broker account; qkt routes by symbol prefix.
+
+The plan at `docs/plans/2026-05-31-headless-env-login.md` reflects this verified
+design; the Approaches/Design sections below are the original pre-spike thinking.
+
 ## Problem
 
 The gateway runs MetaTrader 5 under Wine and exposes a REST API. Today the

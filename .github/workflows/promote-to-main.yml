@@ -1,0 +1,44 @@
+name: promote-to-main
+
+# Manual promotion: dev -> main. A maintainer triggers this from the Actions tab
+# (or `gh workflow run promote-to-main.yml`) after inspecting dev. It verifies the
+# latest check run on dev passed, fast-forwards main to dev, then triggers the
+# image build on main (the fast-forward push uses GITHUB_TOKEN, which by design
+# does not itself trigger another workflow, so docker.yml is dispatched explicitly).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Verify check passed on dev
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          conclusion=$(gh run list --workflow check.yml --branch dev \
+            --limit 1 --json conclusion --jq '.[0].conclusion')
+          echo "latest check run on dev: '$conclusion'"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::dev's latest check run is '$conclusion', not 'success' — refusing to promote"
+            exit 1
+          fi
+
+      - name: Fast-forward main to dev
+        run: git push origin HEAD:refs/heads/main
+
+      - name: Trigger image build on main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run docker.yml --ref main

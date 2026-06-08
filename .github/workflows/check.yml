@@ -1,0 +1,23 @@
+name: check
+
+# Fast feedback on every PR and on pushes to the dev integration branch:
+# run the unit tests. The app's MetaTrader5 dependency is Windows-only, so the
+# suite stubs it (tests/conftest.py) and covers the mt5-free logic.
+
+on:
+  pull_request:
+  push:
+    branches: [dev]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        run: pytest -q

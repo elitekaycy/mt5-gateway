@@ -18,6 +18,7 @@ from lib import (
     validate_type_filling,
     validate_volume,
 )
+from order_time import apply_expiration
 
 order_bp = Blueprint("order", __name__)
 logger = logging.getLogger(__name__)
@@ -188,6 +189,8 @@ def send_market_order_endpoint():
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": type_filling,
         }
+
+        apply_expiration(request_data, data)
 
         if sl is not None:
             request_data["sl"] = sl
@@ -396,6 +399,8 @@ def order_check_endpoint():
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": type_filling,
         }
+
+        apply_expiration(request_data, data)
 
         if sl is not None:
             request_data["sl"] = sl
@@ -959,6 +964,8 @@ def modify_order(ticket):
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": mt5.ORDER_FILLING_RETURN,
         }
+
+        apply_expiration(request_data, data)
 
         result = mt5.order_send(request_data)
 

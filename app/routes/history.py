@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 
 import MetaTrader5 as mt5
+from deal_window import DealWindowError, parse_deal_window
 from decorators import require_mt5_connection
 from errors import (
     internal_error_response,
@@ -144,8 +145,8 @@ def get_order_from_ticket_endpoint():
                 "name": "position",
                 "in": "query",
                 "type": "integer",
-                "required": True,
-                "description": "Position number to filter deals.",
+                "required": False,
+                "description": "Position number to filter deals. Omit for every deal in the range.",
             },
         ],
         "responses": {
@@ -166,34 +167,21 @@ def history_deals_get_endpoint():
     """
     Get Deals History
     ---
-    description: Retrieve historical deals within a specified date range for a particular position.
+    description: Retrieve historical deals within a date range, optionally filtered to one position.
     """
     try:
-        from_date = request.args.get("from_date")
-        to_date = request.args.get("to_date")
-        position = request.args.get("position")
-
-        if not all([from_date, to_date, position]):
-            return validation_error_response(
-                "from_date, to_date, and position parameters are required"
-            )
-
         try:
-            from_date = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
-            to_date = datetime.fromisoformat(to_date.replace("Z", "+00:00"))
-            position = int(position)
-        except ValueError as e:
-            return validation_error_response(f"Invalid parameter format: {str(e)}")
+            from_timestamp, to_timestamp, position = parse_deal_window(request.args)
+        except DealWindowError as e:
+            return validation_error_response(str(e))
 
-        if from_date >= to_date:
-            return validation_error_response("from_date must be before to_date")
-
-        from_timestamp = int(from_date.timestamp())
-        to_timestamp = int(to_date.timestamp())
-        deals = mt5.history_deals_get(from_timestamp, to_timestamp, position=position)
+        if position is not None:
+            deals = mt5.history_deals_get(from_timestamp, to_timestamp, position=position)
+        else:
+            deals = mt5.history_deals_get(from_timestamp, to_timestamp)
 
         if deals is None:
-            return not_found_response("deals history", position)
+            return not_found_response("deals history", position if position is not None else "range")
 
         deals_list = [deal._asdict() for deal in deals]
         return jsonify(deals_list)

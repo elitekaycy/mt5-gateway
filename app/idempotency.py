@@ -3,10 +3,11 @@
 import hashlib
 import json
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Callable, Optional
 
 
 class Decision(Enum):

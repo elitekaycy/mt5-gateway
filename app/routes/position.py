@@ -1,8 +1,6 @@
 import logging
 import math
 
-from mt5_connection import mt5
-from order_requests import OrderRequestError, build_sltp_request
 from decorators import require_mt5_connection
 from errors import (
     internal_error_response,
@@ -21,6 +19,8 @@ from lib import (
     validate_symbol,
     validate_volume,
 )
+from mt5_connection import mt5
+from order_requests import OrderRequestError, build_sltp_request
 from retcodes import classify_retcode
 
 position_bp = Blueprint("position", __name__)
@@ -147,13 +147,9 @@ def close_position_partial_endpoint():
         position_type = position.type
 
         if "symbol" in data and data["symbol"] != symbol:
-            return validation_error_response(
-                f"Symbol does not match position {ticket}"
-            )
+            return validation_error_response(f"Symbol does not match position {ticket}")
         if "type" in data and int(data["type"]) != position_type:
-            return validation_error_response(
-                f"Type does not match position {ticket}"
-            )
+            return validation_error_response(f"Type does not match position {ticket}")
         if not validate_symbol(symbol):
             return validation_error_response(
                 f"Symbol not found or not selectable: {symbol}"
@@ -217,7 +213,9 @@ def close_position_partial_endpoint():
         info = classify_retcode(result.retcode)
         filled_volume = float(getattr(result, "volume", volume))
         remaining_volume = max(0.0, float(position.volume) - filled_volume)
-        logger.info(f"Position {ticket} partially closed: {filled_volume} lots at {price}")
+        logger.info(
+            f"Position {ticket} partially closed: {filled_volume} lots at {price}"
+        )
 
         return jsonify(
             {
@@ -327,9 +325,7 @@ def modify_sl_tp_endpoint():
             return validation_error_response(f"Position {position} not found")
 
         try:
-            request_data = build_sltp_request(
-                data, positions[0], mt5.TRADE_ACTION_SLTP
-            )
+            request_data = build_sltp_request(data, positions[0], mt5.TRADE_ACTION_SLTP)
         except OrderRequestError as error:
             return validation_error_response(str(error))
 

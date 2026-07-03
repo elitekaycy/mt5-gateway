@@ -1,10 +1,10 @@
 import logging
-from datetime import datetime, timedelta, timezone
 
-from mt5_connection import mt5
 import pandas as pd
 from constants import ORDER_TYPE_TO_STRING, MT5Timeframe
+from mt5_connection import mt5
 from retcodes import classify_retcode
+from time_utils import server_epoch_to_utc
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +47,6 @@ def get_symbol_filling_mode(symbol_name):
 
     if filling_mode & 2:
         return mt5.ORDER_FILLING_IOC
-    elif filling_mode & 4:
-        return mt5.ORDER_FILLING_RETURN
     elif filling_mode & 1:
         return mt5.ORDER_FILLING_FOK
     else:
@@ -268,9 +266,7 @@ def get_deal_from_ticket(ticket):
         (deal._asdict() for deal in deals),
         key=lambda deal: (deal["time"], deal.get("time_msc", 0)),
     )
-    entries = [
-        deal for deal in deal_rows if deal.get("entry") == mt5.DEAL_ENTRY_IN
-    ]
+    entries = [deal for deal in deal_rows if deal.get("entry") == mt5.DEAL_ENTRY_IN]
     exits = [
         deal
         for deal in deal_rows
@@ -284,14 +280,12 @@ def get_deal_from_ticket(ticket):
         "ticket": ticket,
         "symbol": opening_deal["symbol"],
         "type": "BUY" if opening_deal["type"] == 0 else "SELL",
-        "volume": sum(deal["volume"] for deal in entries) if entries else opening_deal["volume"],
-        "open_time": datetime.fromtimestamp(
-            opening_deal["time"], tz=timezone.utc
-        ).isoformat(),
+        "volume": sum(deal["volume"] for deal in entries)
+        if entries
+        else opening_deal["volume"],
+        "open_time": server_epoch_to_utc(opening_deal["time"]).isoformat(),
         "close_time": (
-            datetime.fromtimestamp(
-                closing_deal["time"], tz=timezone.utc
-            ).isoformat()
+            server_epoch_to_utc(closing_deal["time"]).isoformat()
             if closing_deal
             else None
         ),
@@ -433,9 +427,18 @@ def validate_type_filling(type_filling_input):
     if isinstance(type_filling_input, str):
         type_filling_str = type_filling_input.upper()
         if type_filling_str not in TYPE_FILLING_MAP:
-            return None, f"Invalid type_filling: {type_filling_input}. Must be one of: FOK, IOC, RETURN"
+            return (
+                None,
+                f"Invalid type_filling: {type_filling_input}. Must be one of: FOK, IOC, RETURN",
+            )
         return TYPE_FILLING_MAP[type_filling_str], None
     elif isinstance(type_filling_input, int):
+        allowed = set(TYPE_FILLING_MAP.values())
+        if type_filling_input not in allowed:
+            return None, "Invalid integer type_filling"
         return type_filling_input, None
     else:
-        return None, "type_filling must be a string (FOK, IOC, RETURN) or integer constant"
+        return (
+            None,
+            "type_filling must be a string (FOK, IOC, RETURN) or integer constant",
+        )

@@ -10,6 +10,7 @@ import MetaTrader5 as _mt5
 
 logger = logging.getLogger(__name__)
 
+
 class SerializedMT5:
     """Serialize access to the process-global MetaTrader5 IPC client."""
 
@@ -72,17 +73,18 @@ class ConnectionStatus(Enum):
 
 
 class MT5Connection:
-    _instance: Optional['MT5Connection'] = None
+    _instance: Optional["MT5Connection"] = None
     _lock = Lock()
 
     def __init__(self):
         self._status = ConnectionStatus.DISCONNECTED
         self._last_error: Optional[str] = None
-        self._max_reconnect_attempts = int(os.getenv('MT5_RECONNECT_ATTEMPTS', '3'))
-        self._base_delay = float(os.getenv('MT5_RECONNECT_BASE_DELAY', '1.0'))
+        self._max_reconnect_attempts = int(os.getenv("MT5_RECONNECT_ATTEMPTS", "3"))
+        self._base_delay = float(os.getenv("MT5_RECONNECT_BASE_DELAY", "1.0"))
+        self._reconnect_lock = Lock()
 
     @classmethod
-    def get_instance(cls) -> 'MT5Connection':
+    def get_instance(cls) -> "MT5Connection":
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -95,11 +97,14 @@ class MT5Connection:
         self._last_error = error
 
         if old_status != new_status:
-            logger.info(f"MT5 connection state changed", extra={
-                "old_status": old_status.value,
-                "new_status": new_status.value,
-                "error": error
-            })
+            logger.info(
+                "MT5 connection state changed",
+                extra={
+                    "old_status": old_status.value,
+                    "new_status": new_status.value,
+                    "error": error,
+                },
+            )
 
     def is_connected(self) -> bool:
         return self._status == ConnectionStatus.CONNECTED
@@ -116,22 +121,30 @@ class MT5Connection:
             attempt += 1
 
             if attempt > 1:
-                self._set_status(ConnectionStatus.RECONNECTING, f"Reconnection attempt {attempt}/{self._max_reconnect_attempts}")
+                self._set_status(
+                    ConnectionStatus.RECONNECTING,
+                    f"Reconnection attempt {attempt}/{self._max_reconnect_attempts}",
+                )
 
             try:
                 if mt5.initialize():
                     account_info = mt5.account_info()
                     if account_info is not None:
-                        logger.info(f"MT5 initialized successfully", extra={
-                            "account": account_info.login,
-                            "server": account_info.server,
-                            "attempt": attempt
-                        })
+                        logger.info(
+                            "MT5 initialized successfully",
+                            extra={
+                                "account": account_info.login,
+                                "server": account_info.server,
+                                "attempt": attempt,
+                            },
+                        )
                         self._set_status(ConnectionStatus.CONNECTED)
                         return True
 
                 error_code, error_str = mt5.last_error()
-                error_msg = f"MT5 initialization failed: {error_str} (code: {error_code})"
+                error_msg = (
+                    f"MT5 initialization failed: {error_str} (code: {error_code})"
+                )
                 logger.error(error_msg, extra={"attempt": attempt})
                 self._set_status(ConnectionStatus.DISCONNECTED, error_msg)
 
@@ -142,10 +155,14 @@ class MT5Connection:
 
             if attempt < self._max_reconnect_attempts:
                 delay = self._base_delay * (2 ** (attempt - 1))
-                logger.info(f"Retrying in {delay}s", extra={"attempt": attempt, "delay": delay})
+                logger.info(
+                    f"Retrying in {delay}s", extra={"attempt": attempt, "delay": delay}
+                )
                 time.sleep(delay)
 
-        final_error = f"Failed to initialize MT5 after {self._max_reconnect_attempts} attempts"
+        final_error = (
+            f"Failed to initialize MT5 after {self._max_reconnect_attempts} attempts"
+        )
         logger.error(final_error)
         self._set_status(ConnectionStatus.DISCONNECTED, final_error)
         return False
@@ -163,8 +180,30 @@ class MT5Connection:
                 logger.warning(f"MT5 connection check failed: {str(e)}")
                 self._set_status(ConnectionStatus.DISCONNECTED, str(e))
 
-        logger.info("Attempting to reconnect to MT5")
-        return self.initialize()
+        if not self._reconnect_lock.acquire(blocking=False):
+            logger.warning("MT5 reconnect already in progress; failing fast")
+            return False
+        try:
+            if self.is_connected():
+                return True
+            logger.info("Attempting to reconnect to MT5")
+            from metrics import metrics
+            from reconciliation import reconcile
+
+            metrics.inc("mt5_reconnects_total")
+            if not self.initialize():
+                metrics.set("mt5_connected", 0)
+                return False
+            try:
+                reconcile()
+            except RuntimeError as error:
+                self._set_status(ConnectionStatus.DISCONNECTED, str(error))
+                metrics.set("mt5_connected", 0)
+                return False
+            metrics.set("mt5_connected", 1)
+            return True
+        finally:
+            self._reconnect_lock.release()
 
     def shutdown(self):
         if self._status != ConnectionStatus.DISCONNECTED:

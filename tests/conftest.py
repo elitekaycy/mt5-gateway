@@ -51,6 +51,7 @@ sys.modules.setdefault("MetaTrader5", _mt5)
 # Keep route tests independent of the optional documentation UI dependency.
 _flasgger = types.ModuleType("flasgger")
 _flasgger.swag_from = lambda *args, **kwargs: lambda function: function
+_flasgger.Swagger = lambda *args, **kwargs: None
 sys.modules.setdefault("flasgger", _flasgger)
 
 # App modules import their siblings by bare name (e.g. `from order_time import ...`),

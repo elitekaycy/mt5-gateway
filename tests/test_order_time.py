@@ -1,5 +1,6 @@
-from order_time import apply_expiration
 from types import SimpleNamespace
+
+from order_time import apply_expiration
 
 ORDER_TIME_GTC = 0
 ORDER_TIME_SPECIFIED = 2
@@ -56,8 +57,6 @@ def test_modify_can_override_existing_expiration():
         type_time=ORDER_TIME_SPECIFIED, time_expiration=2_000_000_000
     )
 
-    apply_expiration(
-        req, {"expiration": 2_100_000_000}, existing_order=existing
-    )
+    apply_expiration(req, {"expiration": 2_100_000_000}, existing_order=existing)
 
     assert req["expiration"] == 2_100_000_000

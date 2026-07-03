@@ -1,6 +1,14 @@
 # MT5 Gateway
 
+[![CI](https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml/badge.svg)](https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Docker Pulls](https://img.shields.io/docker/pulls/elitekaycy/mt5-gateway-api)](https://hub.docker.com/r/elitekaycy/mt5-gateway-api)
+
 HTTP API for MetaTrader 5 running in Wine on Linux.
+
+> [!WARNING]
+> This software can place real trades against real broker accounts. Test with a
+> demo account first. It is provided without warranty; see [LICENSE](LICENSE).
 
 Based on [slowfound's metatrader5-quant-server-python](https://github.com/slowfound/metatrader5-quant-server-python/tree/chapter-1) and his [YouTube tutorial series](https://youtube.com/playlist?list=PLotEOI0Sz3OzdSp7qR6vHs8EYnmQwqWAF).
 
@@ -71,6 +79,34 @@ retrying.
 When calling `/modify_sl_tp`, an omitted `sl` or `tp` preserves its current value.
 Removing protection requires the explicit `clear_sl: true` or `clear_tp: true`
 field.
+
+Every JSON response includes `ok`. Collection responses use `data`; successful
+mutations also include a human-readable `message`, broker `result`, and
+operation-specific safety fields. Errors include `ok: false`, `error`, and
+`error_type`, with optional `details`, `request_id`, and `mt5_error`.
+Interactive endpoint schemas are available at `/apidocs`.
+
+## Security posture
+
+Set `API_KEY` and send it as `Authorization: Bearer <key>`. CORS is disabled
+unless `CORS_ORIGINS` is explicitly configured, and Compose binds API/VNC ports
+to loopback. Never expose either port directly to the public internet; use a
+private network and an authenticated reverse proxy or mTLS. See
+[SECURITY.md](SECURITY.md).
+
+## Operations
+
+- `/health/live` checks only process liveness.
+- `/health/ready` requires a connected MT5 account and inactive kill switch.
+- `/metrics` exposes Prometheus-compatible safety/connection counters.
+- `POST /kill` halts trading; `POST /kill/release` resumes it.
+- `GET /reconcile?magic=...` returns broker positions, orders, and recent deals.
+- Set `MT5_SERVER_UTC_OFFSET_SECONDS` if the broker encodes server-local epochs.
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and the trading-system engineering
+standards in [CLAUDE.md](CLAUDE.md).
 
 ## Credits
 

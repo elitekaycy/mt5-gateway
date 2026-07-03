@@ -1,5 +1,4 @@
 import pytest
-
 from retcodes import RetcodeClass, classify_retcode, success_state
 
 

@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime
 
-from mt5_connection import mt5
 from deal_window import DealWindowError, parse_deal_window
 from decorators import require_mt5_connection
 from errors import (
@@ -13,6 +12,8 @@ from errors import (
 from flasgger import swag_from
 from flask import Blueprint, jsonify, request
 from lib import get_deal_from_ticket, get_order_from_ticket
+from mt5_connection import mt5
+from request_limits import validate_date_range, validate_tick_flags
 
 history_bp = Blueprint("history", __name__)
 logger = logging.getLogger(__name__)
@@ -177,7 +178,9 @@ def history_deals_get_endpoint():
             return validation_error_response(str(e))
 
         if position is not None:
-            deals = mt5.history_deals_get(from_timestamp, to_timestamp, position=position)
+            deals = mt5.history_deals_get(
+                from_timestamp, to_timestamp, position=position
+            )
         else:
             deals = mt5.history_deals_get(from_timestamp, to_timestamp)
 
@@ -317,6 +320,10 @@ def history_deals_range_endpoint():
 
         if from_dt >= to_dt:
             return validation_error_response("from_date must be before to_date")
+        try:
+            validate_date_range(from_dt, to_dt)
+        except ValueError as error:
+            return validation_error_response(str(error))
 
         magic = None
         if magic_raw is not None:
@@ -414,11 +421,15 @@ def copy_ticks_range_endpoint():
 
         if from_dt >= to_dt:
             return validation_error_response("from_date must be before to_date")
+        try:
+            validate_date_range(from_dt, to_dt)
+        except ValueError as error:
+            return validation_error_response(str(error))
 
         flags = mt5.COPY_TICKS_ALL
         if flags_raw is not None:
             try:
-                flags = int(flags_raw)
+                flags = validate_tick_flags(flags_raw)
             except ValueError:
                 return validation_error_response("Invalid flags format")
 

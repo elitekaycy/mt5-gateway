@@ -1,9 +1,7 @@
 from collections import namedtuple
 
-import pytest
-
 import lib
-
+import pytest
 
 Position = namedtuple("Position", "ticket type magic")
 Result = namedtuple("Result", "retcode comment volume")

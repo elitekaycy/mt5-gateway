@@ -11,6 +11,7 @@ on Linux CI with a stubbed mt5, without pulling in Flask and the rest of the app
 """
 
 from mt5_connection import mt5
+from time_utils import utc_epoch_to_server
 
 
 def apply_expiration(request_data, data, existing_order=None):
@@ -30,7 +31,7 @@ def apply_expiration(request_data, data, existing_order=None):
     expiration = data.get("expiration")
     if expiration is not None:
         request_data["type_time"] = mt5.ORDER_TIME_SPECIFIED
-        request_data["expiration"] = int(expiration)
+        request_data["expiration"] = utc_epoch_to_server(expiration)
     elif existing_order is not None:
         request_data["type_time"] = existing_order.type_time
         if getattr(existing_order, "time_expiration", 0):

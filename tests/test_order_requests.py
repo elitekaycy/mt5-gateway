@@ -1,15 +1,12 @@
 from types import SimpleNamespace
 
 import pytest
-
 from order_requests import OrderRequestError, build_sltp_request
 
 
 @pytest.fixture
 def position():
-    return SimpleNamespace(
-        ticket=123, symbol="EURUSD", sl=1.08, tp=1.10
-    )
+    return SimpleNamespace(ticket=123, symbol="EURUSD", sl=1.08, tp=1.10)
 
 
 def test_omitted_sl_is_preserved_when_tp_changes(position):

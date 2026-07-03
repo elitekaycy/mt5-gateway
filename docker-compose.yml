@@ -11,9 +11,21 @@ services:
       - .env
     environment:
       # Headless env login (optional). Empty -> manual VNC flow + persisted volume.
+      # MT5_SERVER is the broker server NAME (e.g. Exness-MT5Trial9); the gateway
+      # resolves it to a connectable access-point address, so no broker directory
+      # or IP knowledge is needed. Set MT5_SERVER_ADDR to a host:port to skip
+      # resolution, or MT5_AUTORESOLVE=0 to force name-only login.
+      #
+      # Resolution uses the public mt5.mtapi.io directory by default (one call, only
+      # on a non-baked broker's first boot; self-seeded thereafter) — so the gateway
+      # runs as a single container out of the box. For a zero-third-party setup,
+      # start the bundled self-hosted resolver with `--profile self-hosted-resolver`;
+      # the default URL below prefers it and transparently falls back to mtapi.io.
       MT5_LOGIN: ${MT5_LOGIN:-}
       MT5_PASSWORD: ${MT5_PASSWORD:-}
       MT5_SERVER: ${MT5_SERVER:-}
+      MT5_SERVER_ADDR: ${MT5_SERVER_ADDR:-}
+      MT5_RESOLVER_URL: ${MT5_RESOLVER_URL:-http://mt5-resolver:80,https://mt5.mtapi.io}
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -34,6 +46,21 @@ services:
         reservations:
           cpus: '0.5'
           memory: 1G
+
+  # Optional self-hosted broker-directory search (opt-in): maps a broker server
+  # NAME to its access-point host:port list, mirroring MetaQuotes' directory, so
+  # resolution runs entirely in your infra with no third-party call. Off by
+  # default (the gateway uses mtapi.io) — start it with
+  # `docker compose --profile self-hosted-resolver up`. No env change needed: the
+  # gateway's default MT5_RESOLVER_URL already prefers this and falls back to
+  # mtapi.io when it isn't running.
+  mt5-resolver:
+    image: timurila/mt5rest:latest
+    container_name: mt5-resolver
+    restart: unless-stopped
+    profiles: ["self-hosted-resolver"]
+    networks:
+      - default
 
 networks:
   default:

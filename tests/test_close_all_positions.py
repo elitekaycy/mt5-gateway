@@ -4,7 +4,6 @@ import pytest
 
 import lib
 
-
 Position = namedtuple("Position", "ticket type magic")
 Result = namedtuple("Result", "retcode comment volume")
 

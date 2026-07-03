@@ -1,13 +1,14 @@
 import logging
 
 from flask import g, jsonify
+
 from retcodes import RetcodeClass, classify_retcode
 
 logger = logging.getLogger(__name__)
 
 
 def _get_request_id():
-    return getattr(g, 'request_id', None)
+    return getattr(g, "request_id", None)
 
 
 def mt5_error_response(operation, result):
@@ -37,7 +38,7 @@ def mt5_error_response(operation, result):
             "retcode": result.retcode,
             "retcode_name": info.name,
             "comment": result.comment,
-        }
+        },
     }
     if info.is_ambiguous:
         response["retry_guidance"] = (
@@ -47,12 +48,15 @@ def mt5_error_response(operation, result):
     if request_id:
         response["request_id"] = request_id
 
-    logger.error(f"MT5 error: {operation}", extra={
-        "operation": operation,
-        "retcode": result.retcode,
-        "retcode_name": info.name,
-        "request_id": request_id
-    })
+    logger.error(
+        f"MT5 error: {operation}",
+        extra={
+            "operation": operation,
+            "retcode": result.retcode,
+            "retcode_name": info.name,
+            "request_id": request_id,
+        },
+    )
 
     return jsonify(response), status_code
 
@@ -114,16 +118,16 @@ def internal_error_response(operation, exception):
     response = {
         "error": "Internal server error",
         "operation": operation,
-        "detail": str(exception)
+        "detail": str(exception),
     }
 
     if request_id:
         response["request_id"] = request_id
 
-    logger.exception(f"Internal error during {operation}", extra={
-        "operation": operation,
-        "request_id": request_id
-    })
+    logger.exception(
+        f"Internal error during {operation}",
+        extra={"operation": operation, "request_id": request_id},
+    )
 
     return jsonify(response), 500
 
@@ -141,10 +145,7 @@ def validation_error_response(message, details=None):
     """
     request_id = _get_request_id()
 
-    response = {
-        "error": message,
-        "error_type": "validation_error"
-    }
+    response = {"error": message, "error_type": "validation_error"}
 
     if details:
         response["details"] = details
@@ -152,10 +153,10 @@ def validation_error_response(message, details=None):
     if request_id:
         response["request_id"] = request_id
 
-    logger.warning(f"Validation error: {message}", extra={
-        "request_id": request_id,
-        "details": details
-    })
+    logger.warning(
+        f"Validation error: {message}",
+        extra={"request_id": request_id, "details": details},
+    )
 
     return jsonify(response), 400
 
@@ -178,10 +179,7 @@ def not_found_response(resource, identifier=None):
     else:
         message = f"{resource.capitalize()} not found"
 
-    response = {
-        "error": message,
-        "error_type": "not_found"
-    }
+    response = {"error": message, "error_type": "not_found"}
 
     if request_id:
         response["request_id"] = request_id

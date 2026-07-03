@@ -1,41 +1,40 @@
 import logging
 
-from mt5_connection import mt5
-from decorators import require_mt5_connection
-from errors import internal_error_response, not_found_response
 from flasgger import swag_from
 from flask import Blueprint, jsonify, request
-from lib import validate_symbol
 
-symbol_bp = Blueprint('symbol', __name__)
+from decorators import require_mt5_connection
+from errors import internal_error_response, not_found_response
+from lib import validate_symbol
+from mt5_connection import mt5
+
+symbol_bp = Blueprint("symbol", __name__)
 logger = logging.getLogger(__name__)
 
 
-@symbol_bp.route('/symbols', methods=['GET'])
+@symbol_bp.route("/symbols", methods=["GET"])
 @require_mt5_connection
-@swag_from({
-    'tags': ['Symbol'],
-    'parameters': [
-        {
-            'name': 'search',
-            'in': 'query',
-            'type': 'string',
-            'required': False,
-            'description': 'Filter symbols by name (e.g., "*EUR*", "USD*").'
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'List of symbols retrieved successfully.',
-            'schema': {
-                '$ref': '#/definitions/SymbolsListResponse'
+@swag_from(
+    {
+        "tags": ["Symbol"],
+        "parameters": [
+            {
+                "name": "search",
+                "in": "query",
+                "type": "string",
+                "required": False,
+                "description": 'Filter symbols by name (e.g., "*EUR*", "USD*").',
             }
+        ],
+        "responses": {
+            200: {
+                "description": "List of symbols retrieved successfully.",
+                "schema": {"$ref": "#/definitions/SymbolsListResponse"},
+            },
+            500: {"description": "Internal server error."},
         },
-        500: {
-            'description': 'Internal server error.'
-        }
     }
-})
+)
 def get_symbols_endpoint():
     """
     Get All Available Symbols
@@ -43,47 +42,42 @@ def get_symbols_endpoint():
     description: Retrieve a list of all symbol names available on the MT5 server.
     """
     try:
-        search = request.args.get('search', '*')
+        search = request.args.get("search", "*")
         symbols = mt5.symbols_get(group=search)
-        
+
         if symbols is None:
             return jsonify({"total": 0, "symbols": []}), 200
-            
+
         symbol_names = [s.name for s in symbols]
-        return jsonify({
-            "total": len(symbol_names),
-            "symbols": sorted(symbol_names)
-        })
+        return jsonify({"total": len(symbol_names), "symbols": sorted(symbol_names)})
 
     except Exception as e:
         return internal_error_response("get_symbols", e)
 
 
-@symbol_bp.route('/symbol_info_tick/<symbol>', methods=['GET'])
+@symbol_bp.route("/symbol_info_tick/<symbol>", methods=["GET"])
 @require_mt5_connection
-@swag_from({
-    'tags': ['Symbol'],
-    'parameters': [
-        {
-            'name': 'symbol',
-            'in': 'path',
-            'type': 'string',
-            'required': True,
-            'description': 'Symbol name to retrieve tick information.'
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'Tick information retrieved successfully.',
-            'schema': {
-                '$ref': '#/definitions/SymbolTickInfo'
+@swag_from(
+    {
+        "tags": ["Symbol"],
+        "parameters": [
+            {
+                "name": "symbol",
+                "in": "path",
+                "type": "string",
+                "required": True,
+                "description": "Symbol name to retrieve tick information.",
             }
+        ],
+        "responses": {
+            200: {
+                "description": "Tick information retrieved successfully.",
+                "schema": {"$ref": "#/definitions/SymbolTickInfo"},
+            },
+            404: {"description": "Failed to get symbol tick info."},
         },
-        404: {
-            'description': 'Failed to get symbol tick info.'
-        }
     }
-})
+)
 def get_symbol_info_tick_endpoint(symbol):
     """
     Get Symbol Tick Information
@@ -104,31 +98,29 @@ def get_symbol_info_tick_endpoint(symbol):
         return internal_error_response("get_symbol_info_tick", e)
 
 
-@symbol_bp.route('/symbol_info/<symbol>', methods=['GET'])
+@symbol_bp.route("/symbol_info/<symbol>", methods=["GET"])
 @require_mt5_connection
-@swag_from({
-    'tags': ['Symbol'],
-    'parameters': [
-        {
-            'name': 'symbol',
-            'in': 'path',
-            'type': 'string',
-            'required': True,
-            'description': 'Symbol name to retrieve information.'
-        }
-    ],
-    'responses': {
-        200: {
-            'description': 'Symbol information retrieved successfully.',
-            'schema': {
-                '$ref': '#/definitions/SymbolInfo'
+@swag_from(
+    {
+        "tags": ["Symbol"],
+        "parameters": [
+            {
+                "name": "symbol",
+                "in": "path",
+                "type": "string",
+                "required": True,
+                "description": "Symbol name to retrieve information.",
             }
+        ],
+        "responses": {
+            200: {
+                "description": "Symbol information retrieved successfully.",
+                "schema": {"$ref": "#/definitions/SymbolInfo"},
+            },
+            404: {"description": "Failed to get symbol info."},
         },
-        404: {
-            'description': 'Failed to get symbol info.'
-        }
     }
-})
+)
 def get_symbol_info(symbol):
     """
     Get Symbol Information

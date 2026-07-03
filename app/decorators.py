@@ -14,19 +14,19 @@ def require_mt5_connection(f):
         conn = MT5Connection.get_instance()
 
         if not conn.ensure_connection():
-            request_id = getattr(g, 'request_id', None)
+            request_id = getattr(g, "request_id", None)
             error_response = {
                 "error": "MT5 unavailable",
                 "detail": conn.get_last_error(),
-                "mt5_status": conn.get_status().value
+                "mt5_status": conn.get_status().value,
             }
             if request_id:
                 error_response["request_id"] = request_id
 
-            logger.error("MT5 connection unavailable for request", extra={
-                "request_id": request_id,
-                "last_error": conn.get_last_error()
-            })
+            logger.error(
+                "MT5 connection unavailable for request",
+                extra={"request_id": request_id, "last_error": conn.get_last_error()},
+            )
             return jsonify(error_response), 503
 
         return f(*args, **kwargs)

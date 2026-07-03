@@ -1,26 +1,27 @@
-from flask import Blueprint, jsonify
 import logging
-from mt5_connection import mt5
-from flasgger import swag_from
 
-error_bp = Blueprint('error', __name__)
+from flasgger import swag_from
+from flask import Blueprint, jsonify
+
+from mt5_connection import mt5
+
+error_bp = Blueprint("error", __name__)
 logger = logging.getLogger(__name__)
 
-@error_bp.route('/last_error', methods=['GET'])
-@swag_from({
-    'tags': ['Error'],
-    'responses': {
-        200: {
-            'description': 'Last error retrieved successfully.',
-            'schema': {
-                '$ref': '#/definitions/LastErrorResponse'
-            }
+
+@error_bp.route("/last_error", methods=["GET"])
+@swag_from(
+    {
+        "tags": ["Error"],
+        "responses": {
+            200: {
+                "description": "Last error retrieved successfully.",
+                "schema": {"$ref": "#/definitions/LastErrorResponse"},
+            },
+            500: {"description": "Internal server error."},
         },
-        500: {
-            'description': 'Internal server error.'
-        }
     }
-})
+)
 def last_error_endpoint():
     """
     Get Last Error Code and Message
@@ -34,21 +35,20 @@ def last_error_endpoint():
         logger.error(f"Error in last_error: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
-@error_bp.route('/last_error_str', methods=['GET'])
-@swag_from({
-    'tags': ['Error'],
-    'responses': {
-        200: {
-            'description': 'Last error message retrieved successfully.',
-            'schema': {
-                '$ref': '#/definitions/LastErrorStringResponse'
-            }
+
+@error_bp.route("/last_error_str", methods=["GET"])
+@swag_from(
+    {
+        "tags": ["Error"],
+        "responses": {
+            200: {
+                "description": "Last error message retrieved successfully.",
+                "schema": {"$ref": "#/definitions/LastErrorStringResponse"},
+            },
+            500: {"description": "Internal server error."},
         },
-        500: {
-            'description': 'Internal server error.'
-        }
     }
-})
+)
 def last_error_str_endpoint():
     """
     Get Last Error Message as String

@@ -1,8 +1,12 @@
 import json
 import logging
 import os
+import time
 
-from mt5_connection import mt5
+from flasgger import swag_from
+from flask import Blueprint, g, jsonify, request
+
+from audit import order_audit
 from constants import ORDER_TYPE_TO_STRING, TRADE_ACTION_DEAL, TRADE_ACTION_PENDING
 from decorators import require_mt5_connection
 from errors import (
@@ -11,8 +15,6 @@ from errors import (
     unknown_outcome_response,
     validation_error_response,
 )
-from flasgger import swag_from
-from flask import Blueprint, g, jsonify, request
 from idempotency import (
     Decision,
     IdempotencyStore,
@@ -20,13 +22,24 @@ from idempotency import (
     request_fingerprint,
 )
 from lib import (
+    get_symbol_filling_mode,
     validate_pending_price,
     validate_sl_tp,
     validate_symbol,
     validate_type_filling,
     validate_volume,
 )
+from metrics import metrics
+from money import (
+    NumericValidationError,
+    finite_float,
+    normalize_price,
+    normalize_volume,
+)
+from mt5_connection import mt5
+from order_requests import build_trade_request
 from order_time import apply_expiration
+from pretrade import PreTradeError, validate_order_intent, validate_price_band
 from retcodes import classify_retcode, success_state
 
 order_bp = Blueprint("order", __name__)
@@ -77,6 +90,7 @@ def send_market_order_endpoint():
     fingerprint = None
     reservation_owned = False
     reservation_completed = False
+    started_at = time.monotonic()
     try:
         request_id = getattr(g, "request_id", "unknown")
         data = request.get_json()
@@ -85,6 +99,11 @@ def send_market_order_endpoint():
 
         if not data:
             return validation_error_response("Order data is required")
+
+        try:
+            validate_order_intent(data)
+        except PreTradeError as error:
+            return validation_error_response(str(error))
 
         body_key = data.get("client_order_id")
         header_key = request.headers.get("Idempotency-Key")
@@ -103,9 +122,7 @@ def send_market_order_endpoint():
                 )
 
             fingerprint = request_fingerprint(data)
-            decision, stored = idempotency_store.begin(
-                idempotency_key, fingerprint
-            )
+            decision, stored = idempotency_store.begin(idempotency_key, fingerprint)
             if decision is Decision.REPLAY:
                 response = jsonify(stored.payload)
                 response.headers["Idempotent-Replayed"] = "true"
@@ -154,13 +171,13 @@ def send_market_order_endpoint():
 
         order_type = ORDER_TYPE_MAP[order_type_str]
 
-        volume = float(data["volume"])
-        if volume <= 0:
-            return validation_error_response("Volume must be positive")
-
-        is_valid, error_msg = validate_volume(data["symbol"], volume)
-        if not is_valid:
-            return validation_error_response(error_msg)
+        symbol_info = mt5.symbol_info(data["symbol"])
+        if symbol_info is None:
+            return validation_error_response("Symbol info unavailable")
+        try:
+            volume = normalize_volume(data["volume"], symbol_info)
+        except NumericValidationError as error:
+            return validation_error_response(str(error))
 
         if order_type in [mt5.ORDER_TYPE_BUY, mt5.ORDER_TYPE_SELL]:
             action = TRADE_ACTION_DEAL
@@ -172,7 +189,13 @@ def send_market_order_endpoint():
                     f"Failed to get symbol price for {data['symbol']}"
                 )
 
-            price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
+            try:
+                price = normalize_price(
+                    tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid,
+                    symbol_info,
+                )
+            except NumericValidationError as error:
+                return validation_error_response(str(error))
 
             logger.info(
                 f"[{request_id}] Market order - fetched price from MT5: type={order_type_str}, bid={tick.bid}, ask={tick.ask}, using_price={price}"
@@ -194,25 +217,39 @@ def send_market_order_endpoint():
             if "price" not in data:
                 return validation_error_response("Price required for pending orders")
 
-            price = float(data["price"])
-            if price <= 0:
-                return validation_error_response("Price must be positive")
+            try:
+                price = normalize_price(data["price"], symbol_info)
+            except NumericValidationError as error:
+                return validation_error_response(str(error))
 
             is_valid, error_msg = validate_pending_price(
                 order_type, data["symbol"], price
             )
             if not is_valid:
                 return validation_error_response(error_msg)
+            market_price = (
+                mt5.symbol_info_tick(data["symbol"]).ask
+                if order_type in (mt5.ORDER_TYPE_BUY_LIMIT, mt5.ORDER_TYPE_BUY_STOP)
+                else mt5.symbol_info_tick(data["symbol"]).bid
+            )
+            try:
+                validate_price_band(price, market_price)
+            except PreTradeError as error:
+                return validation_error_response(str(error))
         else:
             return validation_error_response("Invalid order type")
 
         sl = data.get("sl")
         tp = data.get("tp")
 
-        if sl is not None:
-            sl = float(sl)
-        if tp is not None:
-            tp = float(tp)
+        try:
+            if sl is not None:
+                sl = normalize_price(sl, symbol_info, "sl")
+            if tp is not None:
+                tp = normalize_price(tp, symbol_info, "tp")
+            deviation = finite_float(data.get("deviation", 20), "deviation")
+        except NumericValidationError as error:
+            return validation_error_response(str(error))
 
         logger.info(
             f"[{request_id}] SL/TP from request: sl={sl}, tp={tp}, entry_price={price}"
@@ -227,40 +264,73 @@ def send_market_order_endpoint():
                 return validation_error_response(error_msg)
             logger.info(f"[{request_id}] SL/TP validation passed")
 
-        type_filling = mt5.ORDER_FILLING_IOC
+        type_filling = get_symbol_filling_mode(data["symbol"])
         if "type_filling" in data:
             type_filling, error_msg = validate_type_filling(data["type_filling"])
             if error_msg:
                 return validation_error_response(error_msg)
 
-        request_data = {
-            "action": action,
-            "symbol": data["symbol"],
-            "volume": volume,
-            "type": order_type,
-            "price": price,
-            "deviation": data.get("deviation", 20),
-            "magic": data.get(
+        request_data = build_trade_request(
+            action=action,
+            symbol=data["symbol"],
+            volume=volume,
+            order_type=order_type,
+            price=price,
+            deviation=int(deviation),
+            magic=data.get(
                 "magic",
                 magic_from_key(idempotency_key) if idempotency_key else 0,
             ),
-            "comment": data.get("comment", ""),
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": type_filling,
-        }
+            comment=data.get("comment", ""),
+            type_time=mt5.ORDER_TIME_GTC,
+            type_filling=type_filling,
+            sl=sl,
+            tp=tp,
+        )
 
         apply_expiration(request_data, data)
-
-        if sl is not None:
-            request_data["sl"] = sl
-        if tp is not None:
-            request_data["tp"] = tp
 
         logger.info(
             f"[{request_id}] Sending order to MT5: {json.dumps({k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v for k, v in request_data.items()})}"
         )
 
+        check_result = mt5.order_check(request_data)
+        if check_result is None:
+            return validation_error_response(
+                f"Broker pre-trade check unavailable: {mt5.last_call_error()}"
+            )
+        if check_result.retcode not in (0, mt5.TRADE_RETCODE_DONE):
+            return validation_error_response(
+                f"Broker pre-trade check rejected order: {check_result.comment}",
+                {"retcode": check_result.retcode},
+            )
+
         result = mt5.order_send(request_data)
+        latency_ms = (time.monotonic() - started_at) * 1000
+        metrics.inc(
+            "orders_submitted_total",
+            (("symbol", data["symbol"]), ("side", order_type_str)),
+        )
+        order_audit.emit(
+            "broker_response",
+            client_order_id=idempotency_key,
+            mt5_ticket=getattr(result, "order", None),
+            deal=getattr(result, "deal", None),
+            symbol=data["symbol"],
+            side=order_type_str,
+            order_type=order_type_str,
+            volume_requested=volume,
+            volume_filled=getattr(result, "volume", None),
+            price_requested=price,
+            price_filled=getattr(result, "price", None),
+            retcode=getattr(result, "retcode", None),
+            retcode_name=(
+                classify_retcode(result.retcode).name if result is not None else "NONE"
+            ),
+            latency_ms=round(latency_ms, 3),
+            account_mode=None,
+            magic=request_data["magic"],
+        )
 
         if result is None:
             logger.error(
@@ -281,6 +351,10 @@ def send_market_order_endpoint():
 
         retcode_info = classify_retcode(result.retcode)
         if not retcode_info.is_success:
+            metrics.inc(
+                "orders_failed_total",
+                (("retcode_name", retcode_info.name),),
+            )
             logger.error(
                 f"[{request_id}] MT5 rejected order: retcode={result.retcode}, comment={result.comment}"
             )
@@ -319,9 +393,7 @@ def send_market_order_endpoint():
         if idempotency_key:
             payload["client_order_id"] = idempotency_key
         if reservation_owned:
-            idempotency_store.complete(
-                idempotency_key, fingerprint, payload, 200
-            )
+            idempotency_store.complete(idempotency_key, fingerprint, payload, 200)
             reservation_completed = True
         return jsonify(payload)
 
@@ -473,31 +545,26 @@ def order_check_endpoint():
             if error_msg:
                 return validation_error_response(error_msg)
 
-        request_data = {
-            "action": action,
-            "symbol": data["symbol"],
-            "volume": volume,
-            "type": order_type,
-            "price": price,
-            "deviation": data.get("deviation", 20),
-            "magic": data.get("magic", 0),
-            "comment": data.get("comment", ""),
-            "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": type_filling,
-        }
+        request_data = build_trade_request(
+            action=action,
+            symbol=data["symbol"],
+            volume=volume,
+            order_type=order_type,
+            price=price,
+            deviation=int(data.get("deviation", 20)),
+            magic=int(data.get("magic", 0)),
+            comment=data.get("comment", ""),
+            type_time=mt5.ORDER_TIME_GTC,
+            type_filling=type_filling,
+            sl=sl,
+            tp=tp,
+        )
 
         apply_expiration(request_data, data)
 
-        if sl is not None:
-            request_data["sl"] = sl
-        if tp is not None:
-            request_data["tp"] = tp
-
         result = mt5.order_check(request_data)
         if result is None:
-            return validation_error_response(
-                "Order check failed - MT5 returned None"
-            ), 400
+            return validation_error_response("Order check failed - MT5 returned None")
 
         if result.retcode != mt5.TRADE_RETCODE_DONE and result.retcode != 0:
             return jsonify(
@@ -616,7 +683,7 @@ def order_calc_margin_endpoint():
 
         if margin < 0:
             logger.warning(f"Negative margin calculated for {data['symbol']}: {margin}")
-            return validation_error_response("Invalid margin calculation result"), 400
+            return validation_error_response("Invalid margin calculation result")
 
         return jsonify({"margin": margin})
 
@@ -704,16 +771,8 @@ def order_calc_profit_endpoint():
         if not is_valid:
             return validation_error_response(error_msg)
 
-        action = data.get("action", "DEAL").upper()
-        if action == "DEAL":
-            mt5_action = TRADE_ACTION_DEAL
-        elif action == "PENDING":
-            mt5_action = TRADE_ACTION_PENDING
-        else:
-            mt5_action = TRADE_ACTION_DEAL
-
         profit = mt5.order_calc_profit(
-            mt5_action, data["symbol"], volume, price_open, price_close
+            order_type, data["symbol"], volume, price_open, price_close
         )
 
         if profit is None:
@@ -723,7 +782,7 @@ def order_calc_profit_endpoint():
             return validation_error_response(
                 "Profit calculation unavailable",
                 {"reason": "Symbol may not support this calculation"},
-            ), 400
+            )
 
         logger.info(
             f"Profit calculated: symbol={data['symbol']}, volume={volume}, price_open={price_open}, price_close={price_close}, profit={profit}"
@@ -892,8 +951,6 @@ def cancel_order(ticket):
                     "error_type": "not_found",
                 }
             ), 404
-
-        order = orders[0]
 
         request_data = {
             "action": mt5.TRADE_ACTION_REMOVE,

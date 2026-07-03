@@ -80,6 +80,24 @@ def unknown_outcome_response(operation, last_error=None):
     return jsonify(response), 502
 
 
+def mt5_connection_error_response(operation, last_error=None):
+    """Report an MT5 IPC failure without misrepresenting it as empty data."""
+    request_id = _get_request_id()
+    response = {
+        "error": f"{operation} failed because MT5 is unavailable",
+        "error_type": "connection_error",
+        "mt5_error": {"last_error": last_error},
+    }
+    if request_id:
+        response["request_id"] = request_id
+    logger.error(
+        "MT5 connection error: %s",
+        operation,
+        extra={"operation": operation, "request_id": request_id},
+    )
+    return jsonify(response), 503
+
+
 def internal_error_response(operation, exception):
     """
     Build error response for internal server errors.

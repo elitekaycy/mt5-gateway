@@ -128,7 +128,7 @@ def close_position(position, deviation=20, magic=0, comment=""):
         logger.error(
             f"Failed to close position {position['ticket']}: retcode={order_result.retcode}, comment={order_result.comment}"
         )
-        return None
+        return order_result
 
     logger.info(f"Position {position['ticket']} closed successfully.")
     return order_result
@@ -142,7 +142,7 @@ def close_all_positions(order_type="all", magic=None):
         positions = mt5.positions_get()
         if positions is None:
             logger.error("Failed to retrieve positions.")
-            return []
+            return {"closed": [], "failed": [{"error": "positions_unavailable"}]}
 
         positions_data = [pos._asdict() for pos in positions]
         positions_df = pd.DataFrame(positions_data)
@@ -155,27 +155,48 @@ def close_all_positions(order_type="all", magic=None):
                 logger.error(
                     f"Invalid order_type: {order_type}. Must be 'BUY', 'SELL', or 'all'."
                 )
-                return []
+                return {"closed": [], "failed": [{"error": "invalid_order_type"}]}
             positions_df = positions_df[
                 positions_df["type"] == order_type_dict[order_type]
             ]
 
         if positions_df.empty:
             logger.error("No open positions matching the criteria.")
-            return []
+            return {"closed": [], "failed": []}
 
-        results = []
+        closed = []
+        failed = []
         for _, position in positions_df.iterrows():
             order_result = close_position(position)
-            if order_result:
-                results.append(order_result)
+            if order_result is None:
+                failed.append(
+                    {
+                        "ticket": int(position["ticket"]),
+                        "retcode": None,
+                        "retcode_name": "UNKNOWN_OUTCOME",
+                        "comment": "No result returned by MT5",
+                    }
+                )
             else:
-                logger.error(f"Failed to close position {position['ticket']}.")
+                info = classify_retcode(order_result.retcode)
+                result_data = order_result._asdict()
+                result_data["partial"] = info.name == "DONE_PARTIAL"
+                if info.is_success:
+                    closed.append(result_data)
+                else:
+                    failed.append(
+                        {
+                            "ticket": int(position["ticket"]),
+                            "retcode": order_result.retcode,
+                            "retcode_name": info.name,
+                            "comment": order_result.comment,
+                        }
+                    )
 
-        return results
+        return {"closed": closed, "failed": failed}
     else:
         logger.error("No open positions to close.")
-        return []
+        return {"closed": [], "failed": []}
 
 
 def get_positions(magic=None):
@@ -243,24 +264,44 @@ def get_deal_from_ticket(ticket):
         logger.error(f"No deals found for position ticket {ticket}")
         return None
 
-    # Return the first deal (opening deal)
-    target_deal = deals[0]
+    deal_rows = sorted(
+        (deal._asdict() for deal in deals),
+        key=lambda deal: (deal["time"], deal.get("time_msc", 0)),
+    )
+    entries = [
+        deal for deal in deal_rows if deal.get("entry") == mt5.DEAL_ENTRY_IN
+    ]
+    exits = [
+        deal
+        for deal in deal_rows
+        if deal.get("entry")
+        in (mt5.DEAL_ENTRY_OUT, mt5.DEAL_ENTRY_INOUT, mt5.DEAL_ENTRY_OUT_BY)
+    ]
+    opening_deal = entries[0] if entries else deal_rows[0]
+    closing_deal = exits[-1] if exits else None
 
-    # Extract deal information
-    deal_dict = target_deal._asdict()
     deal_details = {
-        "ticket": deal_dict["ticket"],
-        "symbol": deal_dict["symbol"],
-        "type": "BUY" if deal_dict["type"] == 0 else "SELL",
-        "volume": deal_dict["volume"],
-        "open_time": datetime.fromtimestamp(deal_dict["time"], tz=timezone.utc).isoformat(),
-        "close_time": datetime.fromtimestamp(deal_dict["time"], tz=timezone.utc).isoformat(),
-        "open_price": deal_dict["price"],
-        "close_price": deal_dict["price"],
-        "profit": deal_dict["profit"],
-        "commission": deal_dict["commission"],
-        "swap": deal_dict["swap"],
-        "comment": deal_dict["comment"],
+        "ticket": ticket,
+        "symbol": opening_deal["symbol"],
+        "type": "BUY" if opening_deal["type"] == 0 else "SELL",
+        "volume": sum(deal["volume"] for deal in entries) if entries else opening_deal["volume"],
+        "open_time": datetime.fromtimestamp(
+            opening_deal["time"], tz=timezone.utc
+        ).isoformat(),
+        "close_time": (
+            datetime.fromtimestamp(
+                closing_deal["time"], tz=timezone.utc
+            ).isoformat()
+            if closing_deal
+            else None
+        ),
+        "open_price": opening_deal["price"],
+        "close_price": closing_deal["price"] if closing_deal else None,
+        "profit": sum(deal.get("profit", 0.0) for deal in deal_rows),
+        "commission": sum(deal.get("commission", 0.0) for deal in deal_rows),
+        "swap": sum(deal.get("swap", 0.0) for deal in deal_rows),
+        "comment": (closing_deal or opening_deal).get("comment", ""),
+        "closed": closing_deal is not None,
     }
     return deal_details
 

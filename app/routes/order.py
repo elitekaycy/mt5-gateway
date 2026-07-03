@@ -1049,7 +1049,7 @@ def modify_order(ticket):
             "type_filling": mt5.ORDER_FILLING_RETURN,
         }
 
-        apply_expiration(request_data, data)
+        apply_expiration(request_data, data, existing_order=order)
 
         result = mt5.order_send(request_data)
 

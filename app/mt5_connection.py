@@ -33,19 +33,28 @@ class SerializedMT5:
         def serialized(*args: Any, **kwargs: Any) -> Any:
             with self._lock:
                 result = function(*args, **kwargs)
-                if name == "order_send" and result is None:
+                if (
+                    name not in {"last_error", "shutdown"}
+                    and result is None
+                    and hasattr(self._module, "last_error")
+                ):
                     error = self._module.last_error()
-                    self._local.last_order_error = error
-                    logger.error(
-                        "mt5.order_send returned None - last_error=%s", error
-                    )
+                    self._local.last_call_error = error
+                    if name == "order_send":
+                        logger.error(
+                            "mt5.order_send returned None - last_error=%s", error
+                        )
                 return result
 
         return serialized
 
     def last_order_error(self) -> Any:
         """Return the error captured atomically with this thread's order_send."""
-        return getattr(self._local, "last_order_error", None)
+        return self.last_call_error()
+
+    def last_call_error(self) -> Any:
+        """Return the error captured atomically with the last failed MT5 call."""
+        return getattr(self._local, "last_call_error", None)
 
     def call_atomic(self, operation: Callable[[Any], Any]) -> Any:
         """Run a multi-call MT5 operation without allowing interleaving."""

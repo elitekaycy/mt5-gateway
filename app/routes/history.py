@@ -6,6 +6,7 @@ from deal_window import DealWindowError, parse_deal_window
 from decorators import require_mt5_connection
 from errors import (
     internal_error_response,
+    mt5_connection_error_response,
     not_found_response,
     validation_error_response,
 )
@@ -181,7 +182,9 @@ def history_deals_get_endpoint():
             deals = mt5.history_deals_get(from_timestamp, to_timestamp)
 
         if deals is None:
-            return not_found_response("deals history", position if position is not None else "range")
+            return mt5_connection_error_response(
+                "Get deals history", mt5.last_call_error()
+            )
 
         deals_list = [deal._asdict() for deal in deals]
         return jsonify(deals_list)
@@ -236,7 +239,9 @@ def history_orders_get_endpoint():
 
         orders = mt5.history_orders_get(ticket=ticket)
         if orders is None:
-            return not_found_response("orders history", ticket)
+            return mt5_connection_error_response(
+                "Get orders history", mt5.last_call_error()
+            )
 
         orders_list = [order._asdict() for order in orders]
         return jsonify(orders_list)
@@ -325,7 +330,9 @@ def history_deals_range_endpoint():
         deals = mt5.history_deals_get(from_ts, to_ts)
 
         if deals is None:
-            return jsonify([])
+            return mt5_connection_error_response(
+                "Get deals history range", mt5.last_call_error()
+            )
 
         deals_list = [d._asdict() for d in deals]
         if magic is not None:
@@ -417,7 +424,9 @@ def copy_ticks_range_endpoint():
 
         ticks = mt5.copy_ticks_range(symbol, from_dt, to_dt, flags)
         if ticks is None:
-            return jsonify([])
+            return mt5_connection_error_response(
+                "Copy ticks range", mt5.last_call_error()
+            )
 
         ticks_list = []
         for t in ticks:

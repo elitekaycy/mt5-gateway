@@ -42,6 +42,10 @@ _mt5.TRADE_RETCODE_PLACED = 10008
 _mt5.TRADE_RETCODE_DONE = 10009
 _mt5.TRADE_RETCODE_DONE_PARTIAL = 10010
 _mt5.TRADE_RETCODE_TIMEOUT = 10012
+_mt5.DEAL_ENTRY_IN = 0
+_mt5.DEAL_ENTRY_OUT = 1
+_mt5.DEAL_ENTRY_INOUT = 2
+_mt5.DEAL_ENTRY_OUT_BY = 3
 sys.modules.setdefault("MetaTrader5", _mt5)
 
 # Keep route tests independent of the optional documentation UI dependency.

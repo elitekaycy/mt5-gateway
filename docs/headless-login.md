@@ -29,41 +29,48 @@ idempotent.
 e.g. `MT5_SERVER=Exness-MT5Trial9` → resolver returns `96.0.46.31:443` (one of the
 broker's access points) → MT5 authorises on `Exness-MT5Trial9`, AutoTrading on.
 
-## The resolver
+## Resolution cascade
 
-Resolution queries a broker-directory search — `GET /Search?company=<keyword>`,
-returning each matching broker's servers and their access-point `host:port` lists,
-mirroring MetaQuotes' own directory. By default the gateway uses the public
-`mt5.mtapi.io`, so it runs as a **single container** with nothing else to deploy.
-Resolution happens at most once per broker (a non-baked broker's first boot); after
-that the volume is self-seeded and no call is made.
+Addresses come from three sources, tried in order, with automatic fallthrough — the
+boot tries each candidate address until MT5 authorises, so a stale entry or an
+unknown broker falls through on its own:
 
-For a **zero-third-party** setup, start the bundled self-hosted resolver:
+1. **Baked table** — `app/broker_servers.json`, a `name → [host:port]` map shipped
+   in the image (see [harvesting](#refreshing-the-baked-table)). Offline, instant,
+   no network. Covers the popular brokers.
+2. **Resolver services** — `GET /Search?company=<keyword>` against `MT5_RESOLVER_URL`
+   (default: public `mt5.mtapi.io`, then the optional self-hosted sidecar). These
+   mirror MetaQuotes' live directory, so they cover every real MT5 broker.
+3. **The server name** itself — last resort, against a baked/persisted `servers.dat`.
+
+So the image runs as a **single container** out of the box (baked table + mtapi.io).
+Resolution happens at most once per broker (its first boot); after that MT5 has
+self-seeded the directory and no lookup is made.
+
+For a **zero-third-party** setup, start the bundled self-hosted resolver and make it
+the only one:
 
 ```bash
 docker compose --profile self-hosted-resolver up
+# and set MT5_RESOLVER_URL=http://mt5-resolver:80 to drop mtapi.io
 ```
 
-No env change is needed — the default `MT5_RESOLVER_URL`
-(`http://mt5-resolver:80,https://mt5.mtapi.io`) prefers the sidecar and falls back
-to `mt5.mtapi.io` when it isn't running.
+### Refreshing the baked table
+
+`scripts/harvest-broker-servers.py` regenerates `app/broker_servers.json` from the
+public directory. Run it occasionally (broker addresses change rarely, and MT5
+self-seeds the current directory on first connect, so a slightly stale table still
+bootstraps a login), then rebuild the image.
 
 ## Tuning knobs (all optional)
 
 | Var | Default | Meaning |
 |---|---|---|
 | `MT5_SERVER_ADDR` | unset | Explicit `host:port` — skip resolution and connect here directly. |
-| `MT5_RESOLVER_URL` | `http://mt5-resolver:80,https://mt5.mtapi.io` | Comma-separated resolver base URLs, tried in order. |
-| `MT5_AUTORESOLVE` | `1` | `0` disables resolution — log in by name against a baked/persisted `servers.dat` only (majors). |
+| `MT5_RESOLVER_URL` | `https://mt5.mtapi.io,http://mt5-resolver:80` | Comma-separated resolver base URLs, tried in order (after the baked table). |
+| `MT5_AUTORESOLVE` | `1` | `0` disables the network resolvers — use the baked table + name only. |
 | `MT5_SETUP_URL` | generic MT5 | A broker-branded installer URL (e.g. `.../exness5setup.exe`) to install instead of the generic terminal. Its bundled directory also resolves the broker by name. |
 | `MT5_SETUP_ATTEMPTS` / `MT5_SETUP_TIMEOUT` | `3` / `600` | Install watchdog: bound each silent-install attempt (seconds) and retry, so a stuck Wine installer can't hang the boot forever. |
-
-## Login resolution order
-
-1. `MT5_SERVER_ADDR` if set — connect there, no resolution.
-2. Resolve `MT5_SERVER` → access-point `host:port` — the universal path, any broker.
-3. `MT5_SERVER` name unchanged — used when the resolver is unreachable or
-   `MT5_AUTORESOLVE=0`; relies on a baked/persisted `servers.dat` (major brokers).
 
 ## servers.dat (broker directory)
 

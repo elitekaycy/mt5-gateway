@@ -16,16 +16,17 @@ services:
       # or IP knowledge is needed. Set MT5_SERVER_ADDR to a host:port to skip
       # resolution, or MT5_AUTORESOLVE=0 to force name-only login.
       #
-      # Resolution uses the public mt5.mtapi.io directory by default (one call, only
-      # on a non-baked broker's first boot; self-seeded thereafter) — so the gateway
-      # runs as a single container out of the box. For a zero-third-party setup,
-      # start the bundled self-hosted resolver with `--profile self-hosted-resolver`;
-      # the default URL below prefers it and transparently falls back to mtapi.io.
+      # Resolution is a self-aware cascade tried in order: the baked broker table
+      # (offline, in the image) -> the MT5_RESOLVER_URL services -> the name itself.
+      # The image runs as a single container out of the box (baked table + the
+      # public mt5.mtapi.io). To resolve unbaked brokers with zero third-party, start
+      # the bundled self-hosted resolver with `--profile self-hosted-resolver` and,
+      # to prefer it, set MT5_RESOLVER_URL=http://mt5-resolver:80,https://mt5.mtapi.io.
       MT5_LOGIN: ${MT5_LOGIN:-}
       MT5_PASSWORD: ${MT5_PASSWORD:-}
       MT5_SERVER: ${MT5_SERVER:-}
       MT5_SERVER_ADDR: ${MT5_SERVER_ADDR:-}
-      MT5_RESOLVER_URL: ${MT5_RESOLVER_URL:-http://mt5-resolver:80,https://mt5.mtapi.io}
+      MT5_RESOLVER_URL: ${MT5_RESOLVER_URL:-https://mt5.mtapi.io,http://mt5-resolver:80}
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -50,10 +51,10 @@ services:
   # Optional self-hosted broker-directory search (opt-in): maps a broker server
   # NAME to its access-point host:port list, mirroring MetaQuotes' directory, so
   # resolution runs entirely in your infra with no third-party call. Off by
-  # default (the gateway uses mtapi.io) — start it with
-  # `docker compose --profile self-hosted-resolver up`. No env change needed: the
-  # gateway's default MT5_RESOLVER_URL already prefers this and falls back to
-  # mtapi.io when it isn't running.
+  # default (the baked table covers common brokers; mtapi.io covers the rest).
+  # Start it with `docker compose --profile self-hosted-resolver up`; it is the
+  # deeper fallback in the default MT5_RESOLVER_URL. To make it the ONLY resolver
+  # (no third-party), set MT5_RESOLVER_URL=http://mt5-resolver:80.
   mt5-resolver:
     image: timurila/mt5rest:latest
     container_name: mt5-resolver

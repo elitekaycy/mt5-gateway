@@ -1,5 +1,5 @@
 # 1. Update the base image to the Bookworm tag
-FROM ghcr.io/linuxserver/baseimage-kasmvnc:debianbookworm AS base
+FROM ghcr.io/linuxserver/baseimage-kasmvnc:debianbookworm@sha256:c6129530811450448ab760064b27e111fb3351fc3222af652f605a48eb518ed7 AS base
 
 ENV TITLE=MetaTrader
 ENV WINEARCH=win64
@@ -53,6 +53,7 @@ FROM base
 
 # Copy application files and scripts
 COPY app /app
+COPY VERSION /VERSION
 # Broker directory for headless env login (defaults/servers.dat is gitignored;
 # provide it before build). The dir always has README.md so this COPY succeeds
 # whether or not servers.dat is present.
@@ -66,5 +67,7 @@ RUN touch /var/log/mt5_setup.log && \
   chown abc:abc /var/log/mt5_setup.log && \
   chmod 644 /var/log/mt5_setup.log
 
-EXPOSE 3000 5000 5001 8001 18812
+EXPOSE 3000 5001
 VOLUME /config
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -fsS http://localhost:5001/health/ready || exit 1

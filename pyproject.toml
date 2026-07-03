@@ -1,0 +1,71 @@
+[tool.ruff]
+target-version = "py39"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "S", "DTZ"]
+ignore = ["E501", "B904", "S104", "S603", "S607"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S108"]
+"app/routes/**" = ["B008"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+ignore_missing_imports = true
+exclude = ["tests"]
+explicit_package_bases = true
+mypy_path = "app"
+
+[[tool.mypy.overrides]]
+module = [
+  "app",
+  "audit",
+  "autologin",
+  "config",
+  "constants",
+  "deal_window",
+  "decorators",
+  "errors",
+  "kill_switch",
+  "lib",
+  "logging_config",
+  "metrics",
+  "middleware",
+  "mt5_connection",
+  "order_time",
+  "pretrade",
+  "reconciliation",
+  "request_limits",
+  "responses",
+  "routes.*",
+  "security",
+  "swagger",
+  "version",
+]
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+  "app/app.py",
+  "app/config.py",
+  "app/lib.py",
+  "app/logging_config.py",
+  "app/middleware.py",
+  "app/routes/*",
+  "app/swagger.py",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true

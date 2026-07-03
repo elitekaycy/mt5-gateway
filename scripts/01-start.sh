@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Source common variables and functions
 source /scripts/02-common.sh
@@ -12,4 +13,4 @@ source /scripts/02-common.sh
 # Start Flask API with waitress
 log_message "INFO" "Starting Flask API with waitress..."
 cd /app
-exec wine python -m waitress --host=0.0.0.0 --port=${MT5_API_PORT:-5001} --threads=4 app:app
+exec wine python -m waitress --call --host=0.0.0.0 --port="${MT5_API_PORT:-5001}" --threads=4 app:create_app

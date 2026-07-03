@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 
 import pytest
+
 from autologin import AutoLoginSettings, load_settings, render_start_ini, validate
 
 

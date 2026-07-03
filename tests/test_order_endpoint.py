@@ -2,8 +2,9 @@ from collections import namedtuple
 from types import SimpleNamespace
 
 import pytest
-import routes.order as order_route
 from flask import Flask
+
+import routes.order as order_route
 from idempotency import IdempotencyStore
 from mt5_connection import MT5Connection
 

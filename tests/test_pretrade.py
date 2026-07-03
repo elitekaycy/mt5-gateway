@@ -1,4 +1,5 @@
 import pytest
+
 from pretrade import (
     PreTradeError,
     PreTradeLimits,

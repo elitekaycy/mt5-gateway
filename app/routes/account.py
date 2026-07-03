@@ -1,9 +1,10 @@
 import logging
 
-from decorators import require_mt5_connection
-from errors import internal_error_response
 from flasgger import swag_from
 from flask import Blueprint, g, jsonify
+
+from decorators import require_mt5_connection
+from errors import internal_error_response
 from mt5_connection import mt5
 
 account_bp = Blueprint("account", __name__)

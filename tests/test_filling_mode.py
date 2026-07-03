@@ -1,7 +1,8 @@
 from types import SimpleNamespace
 
-import lib
 import pytest
+
+import lib
 
 
 @pytest.mark.parametrize(

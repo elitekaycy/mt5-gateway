@@ -1,6 +1,9 @@
 import logging
 import math
 
+from flasgger import swag_from
+from flask import Blueprint, jsonify, request
+
 from decorators import require_mt5_connection
 from errors import (
     internal_error_response,
@@ -8,8 +11,6 @@ from errors import (
     unknown_outcome_response,
     validation_error_response,
 )
-from flasgger import swag_from
-from flask import Blueprint, jsonify, request
 from lib import (
     close_all_positions,
     close_position,

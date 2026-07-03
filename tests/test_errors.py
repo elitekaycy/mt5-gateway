@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+from flask import Flask, g
+
 from errors import (
     internal_error_response,
     mt5_connection_error_response,
@@ -8,7 +10,6 @@ from errors import (
     unknown_outcome_response,
     validation_error_response,
 )
-from flask import Flask, g
 
 
 def test_error_helpers_return_consistent_envelopes():

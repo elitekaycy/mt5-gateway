@@ -1,14 +1,15 @@
 import logging
 
 import pandas as pd
+from flasgger import swag_from
+from flask import Blueprint, jsonify, request
+
 from decorators import require_mt5_connection
 from errors import (
     internal_error_response,
     not_found_response,
     validation_error_response,
 )
-from flasgger import swag_from
-from flask import Blueprint, jsonify, request
 from lib import get_timeframe, validate_symbol
 from mt5_connection import mt5
 from request_limits import validate_date_range, validate_num_bars

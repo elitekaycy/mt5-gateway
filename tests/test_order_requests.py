@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from order_requests import OrderRequestError, build_sltp_request
 
 

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+
 from money import (
     NumericValidationError,
     finite_float,

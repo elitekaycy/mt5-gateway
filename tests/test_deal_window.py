@@ -1,4 +1,5 @@
 import pytest
+
 from deal_window import DealWindowError, parse_deal_window
 
 

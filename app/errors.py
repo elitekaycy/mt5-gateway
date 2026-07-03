@@ -1,6 +1,7 @@
 import logging
 
 from flask import g, jsonify
+
 from retcodes import RetcodeClass, classify_retcode
 
 logger = logging.getLogger(__name__)

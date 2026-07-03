@@ -2,6 +2,7 @@ import time
 
 from flasgger import swag_from
 from flask import Blueprint, jsonify
+
 from kill_switch import kill_switch
 from metrics import metrics
 from mt5_connection import MT5Connection, mt5

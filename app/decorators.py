@@ -2,6 +2,7 @@ import logging
 from functools import wraps
 
 from flask import g, jsonify
+
 from mt5_connection import MT5Connection
 
 logger = logging.getLogger(__name__)

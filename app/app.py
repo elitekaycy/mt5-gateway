@@ -5,11 +5,14 @@ import logging
 import os
 import signal
 
-from autologin import load_settings, validate
 from dotenv import load_dotenv
 from flasgger import Swagger
 from flask import Flask
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
+
+from autologin import load_settings, validate
+from config import Settings
 from logging_config import configure_logging
 from metrics import metrics_bp
 from middleware import RequestIDMiddleware
@@ -26,9 +29,6 @@ from routes.position import position_bp
 from routes.symbol import symbol_bp
 from security import install_security_hooks
 from swagger import swagger_config
-from werkzeug.middleware.proxy_fix import ProxyFix
-
-from config import Settings
 
 logger = logging.getLogger(__name__)
 _shutdown_registered = False

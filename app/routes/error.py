@@ -2,6 +2,7 @@ import logging
 
 from flasgger import swag_from
 from flask import Blueprint, jsonify
+
 from mt5_connection import mt5
 
 error_bp = Blueprint("error", __name__)

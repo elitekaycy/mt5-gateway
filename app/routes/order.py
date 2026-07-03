@@ -3,6 +3,9 @@ import logging
 import os
 import time
 
+from flasgger import swag_from
+from flask import Blueprint, g, jsonify, request
+
 from audit import order_audit
 from constants import ORDER_TYPE_TO_STRING, TRADE_ACTION_DEAL, TRADE_ACTION_PENDING
 from decorators import require_mt5_connection
@@ -12,8 +15,6 @@ from errors import (
     unknown_outcome_response,
     validation_error_response,
 )
-from flasgger import swag_from
-from flask import Blueprint, g, jsonify, request
 from idempotency import (
     Decision,
     IdempotencyStore,

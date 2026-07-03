@@ -5,6 +5,7 @@ import logging
 import os
 
 from flask import jsonify, request
+
 from kill_switch import kill_switch
 
 logger = logging.getLogger(__name__)

@@ -1,6 +1,9 @@
 import logging
 from datetime import datetime
 
+from flasgger import swag_from
+from flask import Blueprint, jsonify, request
+
 from deal_window import DealWindowError, parse_deal_window
 from decorators import require_mt5_connection
 from errors import (
@@ -9,8 +12,6 @@ from errors import (
     not_found_response,
     validation_error_response,
 )
-from flasgger import swag_from
-from flask import Blueprint, jsonify, request
 from lib import get_deal_from_ticket, get_order_from_ticket
 from mt5_connection import mt5
 from request_limits import validate_date_range, validate_tick_flags

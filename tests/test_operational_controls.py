@@ -1,8 +1,9 @@
 import threading
 from collections import namedtuple
 
-import reconciliation
 from flask import Flask
+
+import reconciliation
 from kill_switch import KillSwitch
 from metrics import Metrics
 from mt5_connection import ConnectionStatus, MT5Connection

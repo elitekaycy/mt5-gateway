@@ -1,6 +1,7 @@
 import logging
 
 import pandas as pd
+
 from constants import ORDER_TYPE_TO_STRING, MT5Timeframe
 from mt5_connection import mt5
 from retcodes import classify_retcode

@@ -1,51 +1,85 @@
 # Headless broker login
 
-Set broker credentials in `.env` and the gateway logs into MT5 on boot — no VNC.
+Set broker credentials in `.env` and the gateway logs into MT5 on boot — no VNC,
+any broker, just the broker's **server name**. You do not need the broker's IP or a
+pre-built broker directory.
 
 | Var | Meaning |
 |---|---|
 | `MT5_LOGIN` | broker account number |
 | `MT5_PASSWORD` | master (trading) password |
-| `MT5_SERVER` | broker server, e.g. `Exness-MT5Trial9` |
+| `MT5_SERVER` | broker server **name**, e.g. `Exness-MT5Trial9`, `ICMarketsSC-Demo` |
 
-Leaving `MT5_LOGIN` empty keeps the manual VNC flow and the persisted-volume
-login, unchanged.
+Leaving `MT5_LOGIN` empty keeps the manual VNC flow and the persisted-volume login,
+unchanged.
 
-## How it works
+## Why a name is enough
 
-1. On boot, if `MT5_LOGIN` is set, the script seeds `servers.dat` (the broker
-   directory — wine-in-docker can't discover brokers, so it's bundled) into a
-   fresh `/config`.
-2. It writes a startup-config ini (`[Common] Login/Password/Server`,
-   `[Experts] AllowLiveTrading=1`) and launches `terminal64.exe /config:`.
-3. The terminal authorizes headlessly with AutoTrading on; the ini is shredded;
-   flask attaches via bare `initialize()`.
+MT5 under Wine cannot *discover* a broker by name on a fresh volume — it needs the
+broker's record (access-point address + keys) in the encrypted `servers.dat`
+directory, and there is no headless way to make MT5 fill that in from a name alone.
 
-On any login failure the gateway falls back to attaching to the persisted volume,
-logs the error, and reports `/health/ready` 503 until connected.
+The gateway sidesteps this: it **resolves the server name to a raw access-point
+address** (`host:port`) using a broker-directory search service, then hands MT5
+`Server=<host:port>` in its startup config. MT5 connects to the access point
+directly, authorises, and writes the `servers.dat` record itself. So after the first
+login the volume is self-seeded and later boots are instant — the login is
+idempotent.
+
+e.g. `MT5_SERVER=Exness-MT5Trial9` → resolver returns `96.0.46.31:443` (one of the
+broker's access points) → MT5 authorises on `Exness-MT5Trial9`, AutoTrading on.
+
+## The resolver
+
+Resolution queries a broker-directory search — `GET /Search?company=<keyword>`,
+returning each matching broker's servers and their access-point `host:port` lists,
+mirroring MetaQuotes' own directory. By default the gateway uses the public
+`mt5.mtapi.io`, so it runs as a **single container** with nothing else to deploy.
+Resolution happens at most once per broker (a non-baked broker's first boot); after
+that the volume is self-seeded and no call is made.
+
+For a **zero-third-party** setup, start the bundled self-hosted resolver:
+
+```bash
+docker compose --profile self-hosted-resolver up
+```
+
+No env change is needed — the default `MT5_RESOLVER_URL`
+(`http://mt5-resolver:80,https://mt5.mtapi.io`) prefers the sidecar and falls back
+to `mt5.mtapi.io` when it isn't running.
+
+## Tuning knobs (all optional)
+
+| Var | Default | Meaning |
+|---|---|---|
+| `MT5_SERVER_ADDR` | unset | Explicit `host:port` — skip resolution and connect here directly. |
+| `MT5_RESOLVER_URL` | `http://mt5-resolver:80,https://mt5.mtapi.io` | Comma-separated resolver base URLs, tried in order. |
+| `MT5_AUTORESOLVE` | `1` | `0` disables resolution — log in by name against a baked/persisted `servers.dat` only (majors). |
+| `MT5_SETUP_URL` | generic MT5 | A broker-branded installer URL (e.g. `.../exness5setup.exe`) to install instead of the generic terminal. Its bundled directory also resolves the broker by name. |
+| `MT5_SETUP_ATTEMPTS` / `MT5_SETUP_TIMEOUT` | `3` / `600` | Install watchdog: bound each silent-install attempt (seconds) and retry, so a stuck Wine installer can't hang the boot forever. |
+
+## Login resolution order
+
+1. `MT5_SERVER_ADDR` if set — connect there, no resolution.
+2. Resolve `MT5_SERVER` → access-point `host:port` — the universal path, any broker.
+3. `MT5_SERVER` name unchanged — used when the resolver is unreachable or
+   `MT5_AUTORESOLVE=0`; relies on a baked/persisted `servers.dat` (major brokers).
 
 ## servers.dat (broker directory)
 
-`servers.dat` is MT5's broker directory — server names + access-point addresses
-(**no credentials**). It ships **baked into the image** so any user logs in
-headlessly with just their creds; wine-in-docker can't discover brokers on its
-own, so it must be present. The ~728 KB default covers the major brokers (Exness,
-IC Markets, FTMO, Pepperstone, …).
+Still baked into the image (~728 KB, major brokers) as an offline fallback for
+name-based login, but it is **no longer required** for headless login — the resolver
+covers brokers it doesn't list, and MT5 self-seeds the directory on first connect.
 
-Override it without rebuilding, in priority order:
-
-1. **Runtime mount** — `-v /path/servers.dat:/defaults/servers.dat:ro`.
-2. **Private artifacts fetch** — set `QKT_ARTIFACTS_TOKEN` (read-only PAT) to pull
-   `servers.dat` from `QKT_ARTIFACTS_REPO` on first boot (persists to the volume).
-
-To refresh the baked copy, replace `defaults/servers.dat` and rebuild (see
-[`defaults/README.md`](../defaults/README.md)).
+Override without rebuilding: mount your own at `/defaults/servers.dat`, or set
+`QKT_ARTIFACTS_TOKEN` to fetch it from a private repo on first boot.
 
 ## Verify
 
 ```bash
 curl -s http://localhost:5001/account | python3 -m json.tool
-# expect: "login": <yours>, "trade_allowed": true, "trade_expert": true
+# expect: "login": <yours>, "server": "<your server name>",
+#         "trade_allowed": true, "trade_expert": true
 ```
 
 ## Acceptance test

@@ -1,9 +1,10 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-import MetaTrader5 as mt5
+from mt5_connection import mt5
 import pandas as pd
 from constants import ORDER_TYPE_TO_STRING, MT5Timeframe
+from retcodes import classify_retcode
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +124,7 @@ def close_position(position, deviation=20, magic=0, comment=""):
         )
         return None
 
-    if order_result.retcode != mt5.TRADE_RETCODE_DONE:
+    if not classify_retcode(order_result.retcode).is_success:
         logger.error(
             f"Failed to close position {position['ticket']}: retcode={order_result.retcode}, comment={order_result.comment}"
         )
@@ -397,4 +398,3 @@ def validate_type_filling(type_filling_input):
         return type_filling_input, None
     else:
         return None, "type_filling must be a string (FOK, IOC, RETURN) or integer constant"
-

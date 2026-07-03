@@ -69,6 +69,12 @@ swagger_config = {
                     "default": "",
                     "example": "My strategy order"
                 },
+                "client_order_id": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "description": "Stable idempotency key for this intended trade. Reusing it with the same request replays the original response; different parameters return 409.",
+                    "example": "strategy-a-20260703-0001"
+                },
                 "type_filling": {
                     "type": "string",
                     "enum": ["IOC", "FOK", "RETURN"],
@@ -681,8 +687,10 @@ swagger_config = {
             "required": ["position"],
              "properties": {
                 "position": {"type": "integer"},
-                "sl": {"type": "number"},
-                "tp": {"type": "number"}
+                "sl": {"type": "number", "description": "New stop loss. Omission preserves the existing stop."},
+                "tp": {"type": "number", "description": "New take profit. Omission preserves the existing target."},
+                "clear_sl": {"type": "boolean", "description": "Explicitly remove the existing stop loss."},
+                "clear_tp": {"type": "boolean", "description": "Explicitly remove the existing take profit."}
             }
         },
         "ModifySLTPResponse": {

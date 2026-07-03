@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify
 import logging
-import MetaTrader5 as mt5
+from mt5_connection import mt5
 from flasgger import swag_from
 
 error_bp = Blueprint('error', __name__)

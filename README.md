@@ -53,12 +53,24 @@ Place a market order:
 ```bash
 curl -X POST http://localhost:5001/order \
   -H "Content-Type: application/json" \
+  -H "Idempotency-Key: strategy-a-20260703-0001" \
   -d '{
     "symbol": "EURUSD",
     "volume": 0.01,
     "type": "BUY"
   }'
 ```
+
+Clients should send a stable `Idempotency-Key` header (or matching
+`client_order_id` body field) for every intended trade. Repeating the same key and
+request replays the original response without placing another order. Reusing a key
+with different parameters returns `409`. A `502 unknown_outcome` means the broker
+may have accepted the request; reconcile positions and order/deal history before
+retrying.
+
+When calling `/modify_sl_tp`, an omitted `sl` or `tp` preserves its current value.
+Removing protection requires the explicit `clear_sl: true` or `clear_tp: true`
+field.
 
 ## Credits
 

@@ -1,6 +1,6 @@
 import logging
 
-import MetaTrader5 as mt5
+from mt5_connection import mt5
 from decorators import require_mt5_connection
 from errors import internal_error_response
 from flasgger import swag_from

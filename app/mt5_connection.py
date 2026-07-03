@@ -2,30 +2,58 @@ import logging
 import os
 import time
 from enum import Enum
-from threading import Lock
-from typing import Optional
+from functools import wraps
+from threading import Lock, RLock, local
+from typing import Any, Callable, Optional
 
-import MetaTrader5 as mt5
+import MetaTrader5 as _mt5
 
 logger = logging.getLogger(__name__)
 
-# Serialize every mt5.order_send call across the waitress worker pool. The
-# MT5 Python DLL is not thread-safe: two concurrent order_send invocations on
-# different waitress threads caused the second to return None (observed
-# reproducibly on Exness demo SELL-after-BUY straddle legs, zero failures
-# after this lock was added).
-_ORDER_SEND_LOCK = Lock()
-_original_order_send = mt5.order_send
+class SerializedMT5:
+    """Serialize access to the process-global MetaTrader5 IPC client."""
 
-def _locked_order_send(request):
-    with _ORDER_SEND_LOCK:
-        result = _original_order_send(request)
-        if result is None:
-            err = mt5.last_error()
-            logger.error(f"mt5.order_send returned None - last_error={err}")
-        return result
+    def __init__(self, module: Any):
+        self._module = module
+        self._lock = RLock()
+        self._local = local()
+        self._wrappers: dict[str, Callable[..., Any]] = {}
 
-mt5.order_send = _locked_order_send
+    def __getattr__(self, name: str) -> Any:
+        attribute = getattr(self._module, name)
+        if not callable(attribute):
+            return attribute
+
+        if name not in self._wrappers:
+            self._wrappers[name] = self._wrap(name, attribute)
+        return self._wrappers[name]
+
+    def _wrap(self, name: str, function: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(function)
+        def serialized(*args: Any, **kwargs: Any) -> Any:
+            with self._lock:
+                result = function(*args, **kwargs)
+                if name == "order_send" and result is None:
+                    error = self._module.last_error()
+                    self._local.last_order_error = error
+                    logger.error(
+                        "mt5.order_send returned None - last_error=%s", error
+                    )
+                return result
+
+        return serialized
+
+    def last_order_error(self) -> Any:
+        """Return the error captured atomically with this thread's order_send."""
+        return getattr(self._local, "last_order_error", None)
+
+    def call_atomic(self, operation: Callable[[Any], Any]) -> Any:
+        """Run a multi-call MT5 operation without allowing interleaving."""
+        with self._lock:
+            return operation(self._module)
+
+
+mt5 = SerializedMT5(_mt5)
 
 
 class ConnectionStatus(Enum):

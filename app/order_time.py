@@ -10,7 +10,7 @@ Kept in its own module (importing only MetaTrader5) so the logic is unit-testabl
 on Linux CI with a stubbed mt5, without pulling in Flask and the rest of the app.
 """
 
-import MetaTrader5 as mt5
+from mt5_connection import mt5
 
 
 def apply_expiration(request_data, data):

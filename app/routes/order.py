@@ -1,16 +1,24 @@
 import json
 import logging
+import os
 
-import MetaTrader5 as mt5
+from mt5_connection import mt5
 from constants import ORDER_TYPE_TO_STRING, TRADE_ACTION_DEAL, TRADE_ACTION_PENDING
 from decorators import require_mt5_connection
 from errors import (
     internal_error_response,
     mt5_error_response,
+    unknown_outcome_response,
     validation_error_response,
 )
 from flasgger import swag_from
 from flask import Blueprint, g, jsonify, request
+from idempotency import (
+    Decision,
+    IdempotencyStore,
+    magic_from_key,
+    request_fingerprint,
+)
 from lib import (
     validate_pending_price,
     validate_sl_tp,
@@ -19,9 +27,13 @@ from lib import (
     validate_volume,
 )
 from order_time import apply_expiration
+from retcodes import classify_retcode, success_state
 
 order_bp = Blueprint("order", __name__)
 logger = logging.getLogger(__name__)
+idempotency_store = IdempotencyStore(
+    ttl_seconds=float(os.getenv("MT5_IDEMPOTENCY_TTL", "3600"))
+)
 
 
 @order_bp.route("/order", methods=["POST"])
@@ -61,6 +73,10 @@ def send_market_order_endpoint():
     ---
     description: Execute a market order or place a pending order for a specified symbol.
     """
+    idempotency_key = None
+    fingerprint = None
+    reservation_owned = False
+    reservation_completed = False
     try:
         request_id = getattr(g, "request_id", "unknown")
         data = request.get_json()
@@ -69,6 +85,46 @@ def send_market_order_endpoint():
 
         if not data:
             return validation_error_response("Order data is required")
+
+        body_key = data.get("client_order_id")
+        header_key = request.headers.get("Idempotency-Key")
+        if body_key and header_key and body_key != header_key:
+            return validation_error_response(
+                "client_order_id and Idempotency-Key must match"
+            )
+        idempotency_key = body_key or header_key
+        if idempotency_key is not None:
+            if not isinstance(idempotency_key, str):
+                return validation_error_response("client_order_id must be a string")
+            idempotency_key = idempotency_key.strip()
+            if not 1 <= len(idempotency_key) <= 128:
+                return validation_error_response(
+                    "client_order_id must contain 1 to 128 characters"
+                )
+
+            fingerprint = request_fingerprint(data)
+            decision, stored = idempotency_store.begin(
+                idempotency_key, fingerprint
+            )
+            if decision is Decision.REPLAY:
+                response = jsonify(stored.payload)
+                response.headers["Idempotent-Replayed"] = "true"
+                return response, stored.status_code
+            if decision is Decision.CONFLICT:
+                return jsonify(
+                    {
+                        "error": "Idempotency key was already used with different parameters",
+                        "error_type": "idempotency_conflict",
+                    }
+                ), 409
+            if decision is Decision.IN_PROGRESS:
+                return jsonify(
+                    {
+                        "error": "An order with this idempotency key is in progress",
+                        "error_type": "idempotency_in_progress",
+                    }
+                ), 409
+            reservation_owned = True
 
         required_fields = ["symbol", "volume", "type"]
         if not all(field in data for field in required_fields):
@@ -184,7 +240,10 @@ def send_market_order_endpoint():
             "type": order_type,
             "price": price,
             "deviation": data.get("deviation", 20),
-            "magic": data.get("magic", 0),
+            "magic": data.get(
+                "magic",
+                magic_from_key(idempotency_key) if idempotency_key else 0,
+            ),
             "comment": data.get("comment", ""),
             "type_time": mt5.ORDER_TIME_GTC,
             "type_filling": type_filling,
@@ -207,20 +266,37 @@ def send_market_order_endpoint():
             logger.error(
                 f"[{request_id}] order_send returned None for {order_type_str} {data['symbol']}"
             )
-            return validation_error_response(
-                "Order execution failed - MT5 returned None"
+            response, status_code = unknown_outcome_response(
+                "Send order", mt5.last_order_error()
             )
+            if reservation_owned:
+                idempotency_store.complete(
+                    idempotency_key,
+                    fingerprint,
+                    response.get_json(),
+                    status_code,
+                )
+                reservation_completed = True
+            return response, status_code
 
-        if result.retcode not in [
-            mt5.TRADE_RETCODE_DONE,
-            mt5.TRADE_RETCODE_DONE_PARTIAL,
-        ]:
+        retcode_info = classify_retcode(result.retcode)
+        if not retcode_info.is_success:
             logger.error(
                 f"[{request_id}] MT5 rejected order: retcode={result.retcode}, comment={result.comment}"
             )
-            return mt5_error_response("Send order", result)
+            response, status_code = mt5_error_response("Send order", result)
+            if reservation_owned and retcode_info.is_ambiguous:
+                idempotency_store.complete(
+                    idempotency_key,
+                    fingerprint,
+                    response.get_json(),
+                    status_code,
+                )
+                reservation_completed = True
+            return response, status_code
 
-        partial_fill = result.retcode == mt5.TRADE_RETCODE_DONE_PARTIAL
+        state = success_state(result.retcode)
+        partial_fill = state == "partially_executed"
         if partial_fill:
             logger.warning(
                 f"[{request_id}] Partial fill: requested={volume}, filled={result.volume}"
@@ -232,18 +308,28 @@ def send_market_order_endpoint():
         )
 
         result_dict = result._asdict()
-        return jsonify(
-            {
-                "message": f"Order {action_str} successfully",
-                "result": result_dict,
-                "sl_confirmed": result_dict.get("sl"),
-                "tp_confirmed": result_dict.get("tp"),
-                "partial_fill": partial_fill,
-            }
-        )
+        payload = {
+            "message": f"Order {action_str} successfully",
+            "state": state,
+            "result": result_dict,
+            "sl_confirmed": result_dict.get("sl"),
+            "tp_confirmed": result_dict.get("tp"),
+            "partial_fill": partial_fill,
+        }
+        if idempotency_key:
+            payload["client_order_id"] = idempotency_key
+        if reservation_owned:
+            idempotency_store.complete(
+                idempotency_key, fingerprint, payload, 200
+            )
+            reservation_completed = True
+        return jsonify(payload)
 
     except Exception as e:
         return internal_error_response("send_order", e)
+    finally:
+        if reservation_owned and not reservation_completed:
+            idempotency_store.abandon(idempotency_key, fingerprint)
 
 
 @order_bp.route("/order_check", methods=["POST"])
@@ -820,11 +906,9 @@ def cancel_order(ticket):
 
         if result is None:
             logger.error(f"order_send returned None for cancel ticket {ticket}")
-            return validation_error_response(
-                "Order cancellation failed - MT5 returned None"
-            ), 400
+            return unknown_outcome_response("Cancel order", mt5.last_order_error())
 
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
+        if not classify_retcode(result.retcode).is_success:
             logger.error(
                 f"Failed to cancel order {ticket}: retcode={result.retcode}, comment={result.comment}"
             )
@@ -971,11 +1055,9 @@ def modify_order(ticket):
 
         if result is None:
             logger.error(f"order_send returned None for modify ticket {ticket}")
-            return validation_error_response(
-                "Order modification failed - MT5 returned None"
-            ), 400
+            return unknown_outcome_response("Modify order", mt5.last_order_error())
 
-        if result.retcode != mt5.TRADE_RETCODE_DONE:
+        if not classify_retcode(result.retcode).is_success:
             logger.error(
                 f"Failed to modify order {ticket}: retcode={result.retcode}, comment={result.comment}"
             )

@@ -1,6 +1,6 @@
 import time
 
-import MetaTrader5 as mt5
+from mt5_connection import mt5
 from flasgger import swag_from
 from flask import Blueprint, jsonify
 

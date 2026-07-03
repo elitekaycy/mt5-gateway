@@ -1,7 +1,7 @@
 import logging
 
-import MetaTrader5 as mt5
 from flask import g, jsonify
+from retcodes import RetcodeClass, classify_retcode
 
 logger = logging.getLogger(__name__)
 
@@ -23,30 +23,26 @@ def mt5_error_response(operation, result):
     """
     request_id = _get_request_id()
 
-    error_code, error_str = mt5.last_error()
-
-    is_connection_error = (
-        error_code in [10004, 10005, 10006] or
-        result.retcode in [10018, 10019, 10020]
-    )
-
-    if is_connection_error:
-        status_code = 503
-        error_type = "connection_error"
-    else:
-        status_code = 400
-        error_type = "mt5_rejected"
+    info = classify_retcode(result.retcode)
+    status_code, error_type = {
+        RetcodeClass.RETRYABLE: (409, "retryable"),
+        RetcodeClass.AMBIGUOUS: (502, "unknown_outcome"),
+        RetcodeClass.PERMANENT: (400, "mt5_rejected"),
+    }.get(info.classification, (500, "invalid_error_classification"))
 
     response = {
         "error": f"{operation} failed: {result.comment}",
         "error_type": error_type,
         "mt5_error": {
             "retcode": result.retcode,
+            "retcode_name": info.name,
             "comment": result.comment,
-            "error_code": error_code,
-            "error_string": error_str
         }
     }
+    if info.is_ambiguous:
+        response["retry_guidance"] = (
+            "Reconcile positions and order/deal history before retrying."
+        )
 
     if request_id:
         response["request_id"] = request_id
@@ -54,11 +50,34 @@ def mt5_error_response(operation, result):
     logger.error(f"MT5 error: {operation}", extra={
         "operation": operation,
         "retcode": result.retcode,
-        "error_code": error_code,
+        "retcode_name": info.name,
         "request_id": request_id
     })
 
     return jsonify(response), status_code
+
+
+def unknown_outcome_response(operation, last_error=None):
+    """Report an order whose broker-side outcome cannot be determined."""
+    request_id = _get_request_id()
+    response = {
+        "error": f"{operation} outcome is unknown",
+        "error_type": "unknown_outcome",
+        "retry_guidance": (
+            "Reconcile positions and order/deal history before retrying."
+        ),
+    }
+    if last_error is not None:
+        response["mt5_error"] = {"last_error": last_error}
+    if request_id:
+        response["request_id"] = request_id
+
+    logger.error(
+        "Unknown MT5 outcome: %s",
+        operation,
+        extra={"operation": operation, "request_id": request_id},
+    )
+    return jsonify(response), 502
 
 
 def internal_error_response(operation, exception):

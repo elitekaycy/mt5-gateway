@@ -47,3 +47,6 @@ Thumbs.db
 
 # local test credentials
 .demo.env
+
+# Local deployment helpers may embed endpoint credentials.
+scripts/deploy-cutedge-endpoints.sh

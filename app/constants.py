@@ -1,5 +1,5 @@
 from enum import Enum
-import MetaTrader5 as mt5
+from mt5_connection import mt5
 
 class MT5Timeframe(Enum):
     M1 = mt5.TIMEFRAME_M1       # 1-minute

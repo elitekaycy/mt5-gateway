@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 
-import MetaTrader5 as mt5
+from mt5_connection import mt5
 from deal_window import DealWindowError, parse_deal_window
 from decorators import require_mt5_connection
 from errors import (
@@ -441,4 +441,3 @@ def copy_ticks_range_endpoint():
 
     except Exception as e:
         return internal_error_response("copy_ticks_range", e)
-

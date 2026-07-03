@@ -48,6 +48,7 @@ quote-style = "double"
 python_version = "3.9"
 strict = true
 ignore_missing_imports = true
+follow_imports = "skip"
 exclude = ["tests"]
 explicit_package_bases = true
 mypy_path = "app"

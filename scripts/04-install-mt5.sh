@@ -78,24 +78,58 @@ if [ -n "${MT5_LOGIN:-}" ]; then
             fi
         fi
     fi
-    # Resolve the broker server NAME to a connectable access-point address, so a
-    # fresh volume with no baked directory can still log in — MT5 connects by raw
-    # host:port and writes the directory entry itself. Falls back to the name when
-    # the resolver is unreachable or an explicit MT5_SERVER_ADDR is set.
-    resolved="$(python3 -c "import sys, os; sys.path.insert(0, '/app'); \
-from broker_resolver import choose_server; print(choose_server(os.environ))" 2>/dev/null)"
-    if [ -n "$resolved" ]; then
-        [ "$resolved" != "${MT5_SERVER:-}" ] && log_message "INFO" "Resolved '${MT5_SERVER:-}' -> '$resolved'."
-        export MT5_SERVER="$resolved"
-    fi
-    # Render the startup-config ini (login + AllowLiveTrading) and launch with it.
-    log_message "INFO" "Env-login: writing start.ini and launching terminal with /config:."
+    # Build the ordered connect-candidate list — baked table, then resolver
+    # services, then the server name — and try each until MT5 authorizes, so a
+    # stale address or an unknown broker falls through automatically. Runs in the
+    # background so the dependency install below proceeds in parallel; the terminal
+    # is killed by name (not wineserver -k) between tries so it doesn't disturb it.
+    jlogs="$(dirname "$mt5exe")/logs"
     python3 -c "import sys, os; sys.path.insert(0, '/app'); \
+from broker_resolver import connect_candidates; \
+print(chr(10).join(connect_candidates(os.environ)))" > /tmp/mt5_candidates 2>/dev/null
+
+    render_ini() {
+        MT5_SERVER="$1" python3 -c "import sys, os; sys.path.insert(0, '/app'); \
 from autologin import load_settings, render_start_ini; \
 open('$ini_lin', 'w', newline='').write(render_start_ini(load_settings(os.environ)))"
-    $wine_executable "$mt5exe" "/config:C:\\start.ini" &
-    # Shred the ini after the terminal has read it — no plaintext password lingers.
-    ( sleep 45; shred -u "$ini_lin" 2>/dev/null || rm -f "$ini_lin" ) &
+    }
+    authorized() {
+        newest="$(ls -t "$jlogs"/*.log 2>/dev/null | head -1)"
+        [ -n "$newest" ] && iconv -f UTF-16LE -t UTF-8 < "$newest" 2>/dev/null \
+            | grep -qi "authorized on"
+    }
+    first_candidate="$(head -n1 /tmp/mt5_candidates 2>/dev/null)"
+
+    (
+        login_ok=0; first=1
+        while IFS= read -r candidate; do
+            [ -z "$candidate" ] && continue
+            log_message "INFO" "Login attempt via '$candidate'."
+            render_ini "$candidate"
+            $wine_executable "$mt5exe" "/config:C:\\start.ini" &
+            # The first attempt gets a longer window: the terminal cold-starts and
+            # compiles before it can even attempt a login.
+            tries=$([ "$first" -eq 1 ] && echo 36 || echo 18); first=0
+            for _ in $(seq 1 "$tries"); do
+                authorized && { login_ok=1; break; }
+                sleep 5
+            done
+            [ "$login_ok" -eq 1 ] && { log_message "INFO" "Authorized via '$candidate'."; break; }
+            log_message "WARN" "No authorization via '$candidate'; trying next candidate."
+            pkill -f terminal64.exe 2>/dev/null || true
+            sleep 3
+        done < /tmp/mt5_candidates
+        rm -f /tmp/mt5_candidates
+        # If nothing authorized, leave the terminal running on the first candidate so
+        # it keeps retrying and flask can attach if the broker comes back.
+        if [ "$login_ok" -ne 1 ] && [ -n "$first_candidate" ]; then
+            log_message "WARN" "No candidate authorized; leaving terminal retrying."
+            render_ini "$first_candidate"
+            $wine_executable "$mt5exe" "/config:C:\\start.ini" &
+        fi
+        # Shred the ini — no plaintext password lingers in the volume.
+        sleep 5; shred -u "$ini_lin" 2>/dev/null || rm -f "$ini_lin"
+    ) &
 else
     # No env login: attach to whatever the persisted volume is logged into.
     log_message "INFO" "Launching MT5 (no env-login; using persisted login if any)."

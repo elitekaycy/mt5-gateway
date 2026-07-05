@@ -112,6 +112,7 @@ RUN set -eux; \
   wget -qO /tmp/python.exe https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe; \
   printf '%s  %s\n' fb3d0466f3754752ca7fd839a09ffe53375ff2c981279fd4bc23a005458f7f5d /tmp/python.exe | sha256sum -c -; \
   wine /tmp/python.exe /quiet InstallAllUsers=1 PrependPath=1 Include_test=0; wineserver -w; \
+  wine python -m pip install --no-cache-dir --upgrade pip setuptools; wineserver -w; \
   wine python -m pip install --no-cache-dir -r /tmp/requirements.txt; wineserver -w; \
   kill "$xvfb_pid" 2>/dev/null || true; \
   rm -f /tmp/mono.msi /tmp/python.exe

@@ -4,6 +4,13 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-05
+
+### Fixed
+
+- Upgraded Wine Python packaging tools during image build so the release
+  candidate no longer ships vulnerable `setuptools` metadata.
+
 ## [0.3.0] - 2026-07-03
 
 ### Added

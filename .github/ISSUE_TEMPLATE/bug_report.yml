@@ -1,0 +1,19 @@
+name: Bug report
+description: Report reproducible gateway behavior
+body:
+  - type: input
+    attributes: {label: MT5 terminal build}
+    validations: {required: true}
+  - type: input
+    attributes: {label: Broker and server}
+    validations: {required: true}
+  - type: dropdown
+    attributes: {label: Account mode, options: [Demo, Live]}
+    validations: {required: true}
+  - type: input
+    attributes: {label: Image tag / Wine version}
+  - type: textarea
+    attributes: {label: Retcode and last_error output}
+  - type: textarea
+    attributes: {label: Reproduction and sanitized logs}
+    validations: {required: true}

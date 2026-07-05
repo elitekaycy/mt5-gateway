@@ -26,6 +26,7 @@ directory, so later boots need no resolution.
 Pure logic (keyword derivation, response parsing, candidate ordering) is separated
 from the one network call so it is unit-testable without a live service.
 """
+
 from __future__ import annotations
 
 import json
@@ -33,6 +34,8 @@ import logging
 import os
 import urllib.parse
 import urllib.request
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +50,11 @@ TABLE_PATH = os.path.join(os.path.dirname(__file__), "broker_servers.json")
 _FALSY = {"0", "false", "no", "off"}
 
 
-def resolver_urls(env) -> list:
+Fetch = Callable[[str, float], str]
+BrokerTable = Mapping[str, Sequence[str]]
+
+
+def resolver_urls(env: Mapping[str, str]) -> list[str]:
     """Resolver base URLs in priority order, from MT5_RESOLVER_URL or defaults."""
     raw = env.get("MT5_RESOLVER_URL", "").strip()
     if raw:
@@ -65,18 +72,24 @@ def derive_keyword(server_name: str) -> str:
     return server_name.split("-", 1)[0].strip()
 
 
-def load_table(path: str = TABLE_PATH) -> dict:
+def load_table(path: str = TABLE_PATH) -> dict[str, list[str]]:
     """Baked ``server name -> [access host:port]`` map, or {} if absent/unreadable."""
     try:
         with open(path, encoding="utf-8") as handle:
             data = json.load(handle) or {}
-        servers = data.get("servers", {})
-        return servers if isinstance(servers, dict) else {}
+        servers: Any = data.get("servers", {})
+        if not isinstance(servers, dict):
+            return {}
+        return {
+            str(name): [str(endpoint) for endpoint in access]
+            for name, access in servers.items()
+            if isinstance(access, list)
+        }
     except (OSError, ValueError):
         return {}
 
 
-def table_access(server_name: str, table: dict = None) -> list:
+def table_access(server_name: str, table: BrokerTable | None = None) -> list[str]:
     """Access endpoints for ``server_name`` from the baked table (case-insensitive)."""
     entries = load_table() if table is None else table
     if server_name in entries:
@@ -88,7 +101,7 @@ def table_access(server_name: str, table: dict = None) -> list:
     return []
 
 
-def parse_access(search_json_text: str, server_name: str) -> list:
+def parse_access(search_json_text: str, server_name: str) -> list[str]:
     """Access endpoints for an exact server-name match in a /Search response.
 
     Returns the ordered, de-duplicated ``access`` list (``host:port`` strings) of
@@ -101,7 +114,7 @@ def parse_access(search_json_text: str, server_name: str) -> list:
     if not isinstance(data, list):
         return []
     target = server_name.strip().lower()
-    out: list = []
+    out: list[str] = []
     for company in data:
         if not isinstance(company, dict):
             continue
@@ -117,11 +130,19 @@ def parse_access(search_json_text: str, server_name: str) -> list:
 
 def _fetch(url: str, timeout: float) -> str:
     """Fetch a URL and return the body text. Seam for tests to substitute."""
-    with urllib.request.urlopen(url, timeout=timeout) as response:
-        return response.read().decode("utf-8", "replace")
+    if urllib.parse.urlsplit(url).scheme not in {"http", "https"}:
+        raise ValueError("broker resolver URL must use http or https")
+    with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310
+        body: bytes = response.read()
+        return body.decode("utf-8", "replace")
 
 
-def query_resolver(base: str, server_name: str, timeout: float = 15.0, fetch=_fetch) -> list:
+def query_resolver(
+    base: str,
+    server_name: str,
+    timeout: float = 15.0,
+    fetch: Fetch = _fetch,
+) -> list[str]:
     """Access endpoints for ``server_name`` from one resolver, or [] on error/miss."""
     query = urllib.parse.quote(derive_keyword(server_name))
     try:
@@ -132,7 +153,12 @@ def query_resolver(base: str, server_name: str, timeout: float = 15.0, fetch=_fe
     return parse_access(body, server_name)
 
 
-def resolve_access(server_name: str, urls, timeout: float = 15.0, fetch=_fetch) -> list:
+def resolve_access(
+    server_name: str,
+    urls: Sequence[str],
+    timeout: float = 15.0,
+    fetch: Fetch = _fetch,
+) -> list[str]:
     """Access endpoints for ``server_name`` from the first resolver that matches."""
     if not server_name:
         return []
@@ -144,7 +170,11 @@ def resolve_access(server_name: str, urls, timeout: float = 15.0, fetch=_fetch) 
     return []
 
 
-def connect_candidates(env, fetch=_fetch, table: dict = None) -> list:
+def connect_candidates(
+    env: Mapping[str, str],
+    fetch: Fetch = _fetch,
+    table: BrokerTable | None = None,
+) -> list[str]:
     """Ordered, de-duplicated connect addresses for MT5_SERVER, most-preferred first.
 
     Precedence: explicit ``MT5_SERVER_ADDR``; else the baked table, then each
@@ -160,9 +190,9 @@ def connect_candidates(env, fetch=_fetch, table: dict = None) -> list:
     if not name:
         return []
 
-    out: list = []
+    out: list[str] = []
 
-    def add(items):
+    def add(items: Sequence[str]) -> None:
         for item in items:
             item = str(item).strip()
             if item and item not in out:
@@ -176,7 +206,11 @@ def connect_candidates(env, fetch=_fetch, table: dict = None) -> list:
     return out
 
 
-def choose_server(env, fetch=_fetch, table: dict = None) -> str:
+def choose_server(
+    env: Mapping[str, str],
+    fetch: Fetch = _fetch,
+    table: BrokerTable | None = None,
+) -> str:
     """The single most-preferred ``Server=`` value, or "" if none configured.
 
     Convenience wrapper over :func:`connect_candidates` for callers that don't do

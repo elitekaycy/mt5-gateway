@@ -17,6 +17,7 @@ curated set of popular brokers; the resolver is fuzzy, so a keyword pulls every
 matching company. Coverage is a convenience cache — brokers not listed still resolve
 at runtime via the network fallback.
 """
+
 import argparse
 import json
 import os
@@ -31,22 +32,78 @@ TRADEVPS_DATASET = "https://broker-servers.apis.tradevps.net/"
 # fuzzy-matched against company + server names, so one entry pulls all a broker's
 # entities (e.g. "Exness" -> Exness CY/KE/MU/SC/VG/…).
 CURATED = [
-    "Exness", "ICMarkets", "Pepperstone", "FTMO", "Deriv", "XM", "OANDA",
-    "Tickmill", "Equiti", "Vantage", "FxPro", "IG", "Admirals", "AdmiralMarkets",
-    "Alpari", "AMarkets", "Axi", "BlackBull", "CMC", "Dukascopy", "EightcapPU",
-    "Eightcap", "FBS", "Fusion", "GoMarkets", "HFM", "HotForex", "HYCM", "IronFX",
-    "JustMarkets", "LiteFinance", "MultiBank", "OctaFX", "Octa", "Pepperstone",
-    "RoboForex", "Swissquote", "ThinkMarkets", "TMGM", "Tradeview", "Windsor",
-    "FivePercent", "FundedNext", "TheFundedTrader", "MyForexFunds", "E8",
-    "Purple", "Errante", "Scope", "Skilling", "Zero", "CapitalCom", "Plus500",
-    "Coinexx", "Weltrade", "InstaForex", "NordFX", "FxOpen", "Grand", "Darwinex",
-    "Trading212", "MetaQuotes",
+    "Exness",
+    "ICMarkets",
+    "Pepperstone",
+    "FTMO",
+    "Deriv",
+    "XM",
+    "OANDA",
+    "Tickmill",
+    "Equiti",
+    "Vantage",
+    "FxPro",
+    "IG",
+    "Admirals",
+    "AdmiralMarkets",
+    "Alpari",
+    "AMarkets",
+    "Axi",
+    "BlackBull",
+    "CMC",
+    "Dukascopy",
+    "EightcapPU",
+    "Eightcap",
+    "FBS",
+    "Fusion",
+    "GoMarkets",
+    "HFM",
+    "HotForex",
+    "HYCM",
+    "IronFX",
+    "JustMarkets",
+    "LiteFinance",
+    "MultiBank",
+    "OctaFX",
+    "Octa",
+    "Pepperstone",
+    "RoboForex",
+    "Swissquote",
+    "ThinkMarkets",
+    "TMGM",
+    "Tradeview",
+    "Windsor",
+    "FivePercent",
+    "FundedNext",
+    "TheFundedTrader",
+    "MyForexFunds",
+    "E8",
+    "Purple",
+    "Errante",
+    "Scope",
+    "Skilling",
+    "Zero",
+    "CapitalCom",
+    "Plus500",
+    "Coinexx",
+    "Weltrade",
+    "InstaForex",
+    "NordFX",
+    "FxOpen",
+    "Grand",
+    "Darwinex",
+    "Trading212",
+    "MetaQuotes",
 ]
 
 
 def fetch_json(url, timeout=25):
-    req = urllib.request.Request(url, headers={"User-Agent": "mt5-gateway-harvest"})
-    with urllib.request.urlopen(req, timeout=timeout) as response:
+    if urllib.parse.urlsplit(url).scheme not in {"http", "https"}:
+        raise ValueError("resolver URL must use http or https")
+    req = urllib.request.Request(  # noqa: S310
+        url, headers={"User-Agent": "mt5-gateway-harvest"}
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as response:  # noqa: S310
         return json.loads(response.read().decode("utf-8", "replace"))
 
 
@@ -81,12 +138,17 @@ def main():
     parser.add_argument("--resolver", default=DEFAULT_RESOLVER)
     parser.add_argument(
         "--out",
-        default=os.path.join(os.path.dirname(__file__), "..", "app", "broker_servers.json"),
+        default=os.path.join(
+            os.path.dirname(__file__), "..", "app", "broker_servers.json"
+        ),
     )
     args = parser.parse_args()
 
     keywords = sorted(set(CURATED) | set(tradevps_keywords()))
-    print(f"Harvesting {len(keywords)} broker keywords from {args.resolver}", file=sys.stderr)
+    print(
+        f"Harvesting {len(keywords)} broker keywords from {args.resolver}",
+        file=sys.stderr,
+    )
 
     servers = {}
     for keyword in keywords:
@@ -98,7 +160,11 @@ def main():
                 continue
             for record in company.get("results", []) or []:
                 name = str(record.get("name", "")).strip()
-                access = [str(a).strip() for a in record.get("access", []) or [] if str(a).strip()]
+                access = [
+                    str(a).strip()
+                    for a in record.get("access", []) or []
+                    if str(a).strip()
+                ]
                 if name and access:
                     servers[name] = sorted(set(access), key=access.index)
 

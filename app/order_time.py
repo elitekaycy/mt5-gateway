@@ -10,10 +10,11 @@ Kept in its own module (importing only MetaTrader5) so the logic is unit-testabl
 on Linux CI with a stubbed mt5, without pulling in Flask and the rest of the app.
 """
 
-import MetaTrader5 as mt5
+from mt5_connection import mt5
+from time_utils import utc_epoch_to_server
 
 
-def apply_expiration(request_data, data):
+def apply_expiration(request_data, data, existing_order=None):
     """Upgrade an order request to GTD when the caller supplied an expiration.
 
     Reads ``expiration`` (unix epoch seconds) from the incoming request ``data``.
@@ -30,5 +31,9 @@ def apply_expiration(request_data, data):
     expiration = data.get("expiration")
     if expiration is not None:
         request_data["type_time"] = mt5.ORDER_TIME_SPECIFIED
-        request_data["expiration"] = int(expiration)
+        request_data["expiration"] = utc_epoch_to_server(expiration)
+    elif existing_order is not None:
+        request_data["type_time"] = existing_order.type_time
+        if getattr(existing_order, "time_expiration", 0):
+            request_data["expiration"] = existing_order.time_expiration
     return request_data

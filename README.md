@@ -1,10 +1,20 @@
 # MT5 Gateway
 
+[![CI](https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml/badge.svg)](https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Docker Pulls](https://img.shields.io/docker/pulls/elitekaycy/mt5-gateway-api)](https://hub.docker.com/r/elitekaycy/mt5-gateway-api)
+
 A REST API for **MetaTrader 5**, running headless under Wine on Linux in Docker.
 
 Trade, stream prices, and read account state over plain HTTP — no Windows, no
 desktop, no manual login. Point it at any MetaQuotes broker with three env vars and
 it logs itself in on boot.
+
+> [!WARNING]
+> This software can place real trades against real broker accounts. Test with a
+> demo account first. It is provided without warranty; see [LICENSE](LICENSE).
+
+Based on [slowfound's metatrader5-quant-server-python](https://github.com/slowfound/metatrader5-quant-server-python/tree/chapter-1) and his [YouTube tutorial series](https://youtube.com/playlist?list=PLotEOI0Sz3OzdSp7qR6vHs8EYnmQwqWAF).
 
 ```bash
 curl http://localhost:5001/account
@@ -75,13 +85,14 @@ Full details and every knob: **[docs/headless-login.md](docs/headless-login.md)*
 | `MT5_SERVER_ADDR` | Explicit `host:port` to skip name resolution. |
 | `MT5_AUTORESOLVE` | `0` to disable resolution (name-only login against a baked directory). |
 | `MT5_RESOLVER_URL` | Comma-separated resolver URLs, tried in order. |
-| `MT5_SETUP_URL` | A broker-branded MT5 installer URL to use instead of the generic one. |
+| `MT5_SETUP_URL` / `MT5_SETUP_SHA256` | Broker-branded installer URL and its required checksum. |
+| `API_KEY` | Optional bearer token required by every endpoint except `/health/live`. |
 | `CUSTOM_USER` / `PASSWORD` | VNC desktop credentials. |
 | `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` / `ERROR`. |
 
 ## Ports
 
-- **5001** — HTTP API (bind to loopback in production; the API has no auth).
+- **5001** — HTTP API (loopback-bound by default; set `API_KEY`).
 - **3000** — VNC desktop for optional manual login / diagnostics.
 
 ## API
@@ -98,8 +109,52 @@ curl "http://localhost:5001/fetch_data_pos?symbol=EURUSD&timeframe=M1&num_bars=1
 # Market order
 curl -X POST http://localhost:5001/order \
   -H "Content-Type: application/json" \
-  -d '{"symbol": "EURUSD", "volume": 0.01, "type": "BUY"}'
+  -H "Idempotency-Key: strategy-a-20260703-0001" \
+  -d '{
+    "symbol": "EURUSD",
+    "volume": 0.01,
+    "type": "BUY"
+  }'
 ```
+
+Clients should send a stable `Idempotency-Key` header (or matching
+`client_order_id` body field) for every intended trade. Repeating the same key and
+request replays the original response without placing another order. Reusing a key
+with different parameters returns `409`. A `502 unknown_outcome` means the broker
+may have accepted the request; reconcile positions and order/deal history before
+retrying.
+
+When calling `/modify_sl_tp`, an omitted `sl` or `tp` preserves its current value.
+Removing protection requires the explicit `clear_sl: true` or `clear_tp: true`
+field.
+
+Every JSON response includes `ok`. Collection responses use `data`; successful
+mutations also include a human-readable `message`, broker `result`, and
+operation-specific safety fields. Errors include `ok: false`, `error`, and
+`error_type`, with optional `details`, `request_id`, and `mt5_error`.
+Interactive endpoint schemas are available at `/apidocs`.
+
+## Security posture
+
+Set `API_KEY` and send it as `Authorization: Bearer <key>`. CORS is disabled
+unless `CORS_ORIGINS` is explicitly configured, and Compose binds API/VNC ports
+to loopback. Never expose either port directly to the public internet; use a
+private network and an authenticated reverse proxy or mTLS. See
+[SECURITY.md](SECURITY.md).
+
+## Operations
+
+- `/health/live` checks only process liveness.
+- `/health/ready` requires a connected MT5 account and inactive kill switch.
+- `/metrics` exposes Prometheus-compatible safety/connection counters.
+- `POST /kill` halts trading; `POST /kill/release` resumes it.
+- `GET /reconcile?magic=...` returns broker positions, orders, and recent deals.
+- Set `MT5_SERVER_UTC_OFFSET_SECONDS` if the broker encodes server-local epochs.
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) and the trading-system engineering
+standards in [CLAUDE.md](CLAUDE.md).
 
 ## Architecture
 
@@ -109,24 +164,17 @@ REST client ──HTTP──▶ Flask (waitress)  ──Python IPC──▶  MT5
                           └── broker_resolver: name ──▶ host:port ┘  (first boot only)
 ```
 
-- `app/` — the Flask service: routes, MT5 connection management, the broker resolver.
-- `scripts/` — boot sequence: install Wine deps, MT5, Python; resolve + log in.
-- MT5 state (login, broker directory) persists in the `/config` Docker volume.
+- `app/` — Flask routes, safety controls, MT5 connection, and broker resolver.
+- `scripts/` — boot, Wine/MT5 install, resolver cascade, and headless login.
+- MT5 state persists in the `/config` Docker volume.
 
 ## Development
 
 ```bash
-python3 -m pytest tests/        # pure-logic unit tests (no Wine needed)
+ruff check .
+mypy app/
+pytest -q --cov
 ```
-
-`app/` modules that don't touch the MT5 binary (autologin, broker_resolver,
-order_time, …) are pure and unit-tested on any host. See `tests/`.
-
-## Security
-
-The API is unauthenticated — anyone who reaches port 5001 can place orders. Bind it
-to loopback and reach it over an SSH tunnel or private network. Never expose 3000 or
-5001 to the public internet.
 
 ## Credits
 

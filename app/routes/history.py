@@ -1,17 +1,20 @@
 import logging
 from datetime import datetime
 
-import MetaTrader5 as mt5
+from flasgger import swag_from
+from flask import Blueprint, jsonify, request
+
 from deal_window import DealWindowError, parse_deal_window
 from decorators import require_mt5_connection
 from errors import (
     internal_error_response,
+    mt5_connection_error_response,
     not_found_response,
     validation_error_response,
 )
-from flasgger import swag_from
-from flask import Blueprint, jsonify, request
 from lib import get_deal_from_ticket, get_order_from_ticket
+from mt5_connection import mt5
+from request_limits import validate_date_range, validate_tick_flags
 
 history_bp = Blueprint("history", __name__)
 logger = logging.getLogger(__name__)
@@ -176,12 +179,16 @@ def history_deals_get_endpoint():
             return validation_error_response(str(e))
 
         if position is not None:
-            deals = mt5.history_deals_get(from_timestamp, to_timestamp, position=position)
+            deals = mt5.history_deals_get(
+                from_timestamp, to_timestamp, position=position
+            )
         else:
             deals = mt5.history_deals_get(from_timestamp, to_timestamp)
 
         if deals is None:
-            return not_found_response("deals history", position if position is not None else "range")
+            return mt5_connection_error_response(
+                "Get deals history", mt5.last_call_error()
+            )
 
         deals_list = [deal._asdict() for deal in deals]
         return jsonify(deals_list)
@@ -236,7 +243,9 @@ def history_orders_get_endpoint():
 
         orders = mt5.history_orders_get(ticket=ticket)
         if orders is None:
-            return not_found_response("orders history", ticket)
+            return mt5_connection_error_response(
+                "Get orders history", mt5.last_call_error()
+            )
 
         orders_list = [order._asdict() for order in orders]
         return jsonify(orders_list)
@@ -312,6 +321,10 @@ def history_deals_range_endpoint():
 
         if from_dt >= to_dt:
             return validation_error_response("from_date must be before to_date")
+        try:
+            validate_date_range(from_dt, to_dt)
+        except ValueError as error:
+            return validation_error_response(str(error))
 
         magic = None
         if magic_raw is not None:
@@ -325,7 +338,9 @@ def history_deals_range_endpoint():
         deals = mt5.history_deals_get(from_ts, to_ts)
 
         if deals is None:
-            return jsonify([])
+            return mt5_connection_error_response(
+                "Get deals history range", mt5.last_call_error()
+            )
 
         deals_list = [d._asdict() for d in deals]
         if magic is not None:
@@ -407,17 +422,23 @@ def copy_ticks_range_endpoint():
 
         if from_dt >= to_dt:
             return validation_error_response("from_date must be before to_date")
+        try:
+            validate_date_range(from_dt, to_dt)
+        except ValueError as error:
+            return validation_error_response(str(error))
 
         flags = mt5.COPY_TICKS_ALL
         if flags_raw is not None:
             try:
-                flags = int(flags_raw)
+                flags = validate_tick_flags(flags_raw)
             except ValueError:
                 return validation_error_response("Invalid flags format")
 
         ticks = mt5.copy_ticks_range(symbol, from_dt, to_dt, flags)
         if ticks is None:
-            return jsonify([])
+            return mt5_connection_error_response(
+                "Copy ticks range", mt5.last_call_error()
+            )
 
         ticks_list = []
         for t in ticks:
@@ -441,4 +462,3 @@ def copy_ticks_range_endpoint():
 
     except Exception as e:
         return internal_error_response("copy_ticks_range", e)
-

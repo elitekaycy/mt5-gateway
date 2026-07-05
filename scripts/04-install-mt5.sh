@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 source /scripts/02-common.sh
 
@@ -8,15 +9,22 @@ log_message "RUNNING" "04-install-mt5.sh"
 # (e.g. "MetaTrader 5 EXNESS"), not "MetaTrader 5", so locate the terminal by
 # search rather than a fixed path.
 program_files="/config/.wine/drive_c/Program Files"
-find_terminal() { find "$program_files" -iname terminal64.exe 2>/dev/null | head -1; }
+find_terminal() {
+    find "$program_files" -iname terminal64.exe -print -quit 2>/dev/null
+}
 
 installer_url="${MT5_SETUP_URL:-$mt5setup_url}"
+installer_sha256="${MT5_SETUP_SHA256:-$mt5setup_sha256}"
+if [ -n "${MT5_SETUP_URL:-}" ] && [ -z "${MT5_SETUP_SHA256:-}" ]; then
+    log_message "ERROR" "MT5_SETUP_SHA256 is required with a custom MT5_SETUP_URL."
+    exit 1
+fi
 
 if [ -n "$(find_terminal)" ]; then
     log_message "INFO" "MetaTrader 5 already installed at $(find_terminal)."
 else
     log_message "INFO" "MetaTrader 5 not installed. Installing from $installer_url..."
-    $wine_executable reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f
+    "$wine_executable" reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f
     # The silent installer can spin forever under Wine (no terminal64.exe ever
     # written), so bound each attempt with a timeout and retry instead of hanging
     # the boot indefinitely.
@@ -27,8 +35,14 @@ else
         attempt=$((attempt + 1))
         log_message "INFO" "Downloading MT5 installer (attempt $attempt/$install_attempts)..."
         wget -O /tmp/mt5setup.exe "$installer_url" > /dev/null 2>&1
+        verify_download /tmp/mt5setup.exe "$installer_sha256" || {
+            log_message "ERROR" "MT5 installer checksum mismatch."
+            exit 1
+        }
         log_message "INFO" "Installing MetaTrader 5 (timeout ${install_timeout}s)..."
-        timeout "$install_timeout" $wine_executable /tmp/mt5setup.exe /auto
+        if ! timeout "$install_timeout" "$wine_executable" /tmp/mt5setup.exe /auto; then
+            log_message "WARN" "MT5 installer timed out or failed on attempt $attempt."
+        fi
         rm -f /tmp/mt5setup.exe
         [ -n "$(find_terminal)" ] && break
         log_message "WARN" "Install attempt $attempt produced no terminal64.exe; retrying."
@@ -39,7 +53,7 @@ fi
 mt5exe="$(find_terminal)"
 if [ -z "$mt5exe" ]; then
     log_message "ERROR" "MetaTrader 5 install failed. MT5 cannot be run."
-    exit 0
+    exit 1
 fi
 
 mt5cfg="$(dirname "$mt5exe")/Config"
@@ -94,7 +108,13 @@ from autologin import load_settings, render_start_ini; \
 open('$ini_lin', 'w', newline='').write(render_start_ini(load_settings(os.environ)))"
     }
     authorized() {
-        newest="$(ls -t "$jlogs"/*.log 2>/dev/null | head -1)"
+        newest=""
+        for log_file in "$jlogs"/*.log; do
+            [ -e "$log_file" ] || continue
+            if [ -z "$newest" ] || [ "$log_file" -nt "$newest" ]; then
+                newest="$log_file"
+            fi
+        done
         [ -n "$newest" ] && iconv -f UTF-16LE -t UTF-8 < "$newest" 2>/dev/null \
             | grep -qi "authorized on"
     }
@@ -106,7 +126,7 @@ open('$ini_lin', 'w', newline='').write(render_start_ini(load_settings(os.enviro
             [ -z "$candidate" ] && continue
             log_message "INFO" "Login attempt via '$candidate'."
             render_ini "$candidate"
-            $wine_executable "$mt5exe" "/config:C:\\start.ini" &
+            "$wine_executable" "$mt5exe" "/config:C:\\start.ini" &
             # The first attempt gets a longer window: the terminal cold-starts and
             # compiles before it can even attempt a login.
             tries=$([ "$first" -eq 1 ] && echo 36 || echo 18); first=0
@@ -125,7 +145,7 @@ open('$ini_lin', 'w', newline='').write(render_start_ini(load_settings(os.enviro
         if [ "$login_ok" -ne 1 ] && [ -n "$first_candidate" ]; then
             log_message "WARN" "No candidate authorized; leaving terminal retrying."
             render_ini "$first_candidate"
-            $wine_executable "$mt5exe" "/config:C:\\start.ini" &
+            "$wine_executable" "$mt5exe" "/config:C:\\start.ini" &
         fi
         # Shred the ini — no plaintext password lingers in the volume.
         sleep 5; shred -u "$ini_lin" 2>/dev/null || rm -f "$ini_lin"
@@ -133,5 +153,5 @@ open('$ini_lin', 'w', newline='').write(render_start_ini(load_settings(os.enviro
 else
     # No env login: attach to whatever the persisted volume is logged into.
     log_message "INFO" "Launching MT5 (no env-login; using persisted login if any)."
-    $wine_executable "$mt5exe" &
+    "$wine_executable" "$mt5exe" &
 fi

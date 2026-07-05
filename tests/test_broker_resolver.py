@@ -143,5 +143,7 @@ def test_connect_candidates_empty_without_server():
 
 
 def test_choose_server_returns_first_candidate():
-    assert choose_server({"MT5_SERVER": "Exness-MT5Trial9"}, table=TABLE) == "10.0.0.1:443"
+    assert (
+        choose_server({"MT5_SERVER": "Exness-MT5Trial9"}, table=TABLE) == "10.0.0.1:443"
+    )
     assert choose_server({}) == ""

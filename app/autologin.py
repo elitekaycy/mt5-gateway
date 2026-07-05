@@ -4,6 +4,7 @@ Pure module: NO MetaTrader5 import, so it runs under host pytest. It decides
 *what* to do (is login enabled, what startup ini); the boot script performs the
 MT5-coupled mechanism (seed servers.dat, launch the terminal with the ini).
 """
+
 from dataclasses import dataclass
 
 

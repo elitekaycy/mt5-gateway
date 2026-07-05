@@ -29,11 +29,15 @@ services:
       MT5_RESOLVER_URL: ${MT5_RESOLVER_URL:-https://mt5.mtapi.io,http://mt5-resolver:80}
     restart: unless-stopped
     ports:
-      - "3000:3000"
-      - "5001:5001"
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:5001:5001"
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health/ready"]
+      test:
+        [
+          "CMD-SHELL",
+          'if [ -n "$$API_KEY" ]; then curl -fsS -H "Authorization: Bearer $$API_KEY" http://localhost:5001/health/ready; else curl -fsS http://localhost:5001/health/ready; fi',
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -56,7 +60,7 @@ services:
   # deeper fallback in the default MT5_RESOLVER_URL. To make it the ONLY resolver
   # (no third-party), set MT5_RESOLVER_URL=http://mt5-resolver:80.
   mt5-resolver:
-    image: timurila/mt5rest:latest
+    image: elitekaycy/mt5-rest:latest
     container_name: mt5-resolver
     restart: unless-stopped
     profiles: ["self-hosted-resolver"]

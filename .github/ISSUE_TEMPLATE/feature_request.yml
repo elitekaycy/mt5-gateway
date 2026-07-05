@@ -1,0 +1,15 @@
+name: Feature request
+description: Propose a safe gateway capability
+body:
+  - type: textarea
+    attributes: {label: Problem}
+    validations: {required: true}
+  - type: textarea
+    attributes: {label: Proposed API surface}
+  - type: dropdown
+    attributes:
+      label: Does this affect order placement?
+      options: ["Yes", "No", "Unsure"]
+    validations: {required: true}
+  - type: textarea
+    attributes: {label: Trading-safety impact}

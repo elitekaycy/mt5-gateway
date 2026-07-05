@@ -1,13 +1,14 @@
 import logging
 
-import MetaTrader5 as mt5
 from flask import g, jsonify
+
+from retcodes import RetcodeClass, classify_retcode
 
 logger = logging.getLogger(__name__)
 
 
 def _get_request_id():
-    return getattr(g, 'request_id', None)
+    return getattr(g, "request_id", None)
 
 
 def mt5_error_response(operation, result):
@@ -23,42 +24,82 @@ def mt5_error_response(operation, result):
     """
     request_id = _get_request_id()
 
-    error_code, error_str = mt5.last_error()
-
-    is_connection_error = (
-        error_code in [10004, 10005, 10006] or
-        result.retcode in [10018, 10019, 10020]
-    )
-
-    if is_connection_error:
-        status_code = 503
-        error_type = "connection_error"
-    else:
-        status_code = 400
-        error_type = "mt5_rejected"
+    info = classify_retcode(result.retcode)
+    status_code, error_type = {
+        RetcodeClass.RETRYABLE: (409, "retryable"),
+        RetcodeClass.AMBIGUOUS: (502, "unknown_outcome"),
+        RetcodeClass.PERMANENT: (400, "mt5_rejected"),
+    }.get(info.classification, (500, "invalid_error_classification"))
 
     response = {
         "error": f"{operation} failed: {result.comment}",
         "error_type": error_type,
         "mt5_error": {
             "retcode": result.retcode,
+            "retcode_name": info.name,
             "comment": result.comment,
-            "error_code": error_code,
-            "error_string": error_str
-        }
+        },
     }
+    if info.is_ambiguous:
+        response["retry_guidance"] = (
+            "Reconcile positions and order/deal history before retrying."
+        )
 
     if request_id:
         response["request_id"] = request_id
 
-    logger.error(f"MT5 error: {operation}", extra={
-        "operation": operation,
-        "retcode": result.retcode,
-        "error_code": error_code,
-        "request_id": request_id
-    })
+    logger.error(
+        f"MT5 error: {operation}",
+        extra={
+            "operation": operation,
+            "retcode": result.retcode,
+            "retcode_name": info.name,
+            "request_id": request_id,
+        },
+    )
 
     return jsonify(response), status_code
+
+
+def unknown_outcome_response(operation, last_error=None):
+    """Report an order whose broker-side outcome cannot be determined."""
+    request_id = _get_request_id()
+    response = {
+        "error": f"{operation} outcome is unknown",
+        "error_type": "unknown_outcome",
+        "retry_guidance": (
+            "Reconcile positions and order/deal history before retrying."
+        ),
+    }
+    if last_error is not None:
+        response["mt5_error"] = {"last_error": last_error}
+    if request_id:
+        response["request_id"] = request_id
+
+    logger.error(
+        "Unknown MT5 outcome: %s",
+        operation,
+        extra={"operation": operation, "request_id": request_id},
+    )
+    return jsonify(response), 502
+
+
+def mt5_connection_error_response(operation, last_error=None):
+    """Report an MT5 IPC failure without misrepresenting it as empty data."""
+    request_id = _get_request_id()
+    response = {
+        "error": f"{operation} failed because MT5 is unavailable",
+        "error_type": "connection_error",
+        "mt5_error": {"last_error": last_error},
+    }
+    if request_id:
+        response["request_id"] = request_id
+    logger.error(
+        "MT5 connection error: %s",
+        operation,
+        extra={"operation": operation, "request_id": request_id},
+    )
+    return jsonify(response), 503
 
 
 def internal_error_response(operation, exception):
@@ -77,16 +118,16 @@ def internal_error_response(operation, exception):
     response = {
         "error": "Internal server error",
         "operation": operation,
-        "detail": str(exception)
+        "detail": str(exception),
     }
 
     if request_id:
         response["request_id"] = request_id
 
-    logger.exception(f"Internal error during {operation}", extra={
-        "operation": operation,
-        "request_id": request_id
-    })
+    logger.exception(
+        f"Internal error during {operation}",
+        extra={"operation": operation, "request_id": request_id},
+    )
 
     return jsonify(response), 500
 
@@ -104,10 +145,7 @@ def validation_error_response(message, details=None):
     """
     request_id = _get_request_id()
 
-    response = {
-        "error": message,
-        "error_type": "validation_error"
-    }
+    response = {"error": message, "error_type": "validation_error"}
 
     if details:
         response["details"] = details
@@ -115,10 +153,10 @@ def validation_error_response(message, details=None):
     if request_id:
         response["request_id"] = request_id
 
-    logger.warning(f"Validation error: {message}", extra={
-        "request_id": request_id,
-        "details": details
-    })
+    logger.warning(
+        f"Validation error: {message}",
+        extra={"request_id": request_id, "details": details},
+    )
 
     return jsonify(response), 400
 
@@ -141,10 +179,7 @@ def not_found_response(resource, identifier=None):
     else:
         message = f"{resource.capitalize()} not found"
 
-    response = {
-        "error": message,
-        "error_type": "not_found"
-    }
+    response = {"error": message, "error_type": "not_found"}
 
     if request_id:
         response["request_id"] = request_id

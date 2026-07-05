@@ -40,6 +40,9 @@ def test_auth_and_kill_gate(monkeypatch, tmp_path):
 
     assert client.post("/order").status_code == 401
     assert client.get("/health/live").status_code == 200
+    assert client.get("/apidocs/").status_code == 404
+    assert client.get("/apispec_1.json").status_code == 404
+    assert client.get("/flasgger_static/swagger-ui.css").status_code == 404
     assert (
         client.post("/order", headers={"Authorization": "Bearer secret"}).status_code
         == 200

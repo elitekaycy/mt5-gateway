@@ -9,6 +9,7 @@ pre-built broker directory.
 | `MT5_LOGIN` | broker account number |
 | `MT5_PASSWORD` | master (trading) password |
 | `MT5_SERVER` | broker server **name**, e.g. `Exness-MT5Trial9`, `ICMarketsSC-Demo` |
+| `MT5_ENABLE_ALGO_TRADING` | optional; defaults to `1`. Set `0`, `false`, `no`, `off`, or `disabled` to launch headless with MT5 Expert/live trading disabled. |
 
 Leaving `MT5_LOGIN` empty keeps the manual VNC flow and the persisted-volume login,
 unchanged.
@@ -26,8 +27,9 @@ directly, authorises, and writes the `servers.dat` record itself. So after the f
 login the volume is self-seeded and later boots are instant — the login is
 idempotent.
 
-e.g. `MT5_SERVER=Exness-MT5Trial9` → resolver returns `96.0.46.31:443` (one of the
-broker's access points) → MT5 authorises on `Exness-MT5Trial9`, AutoTrading on.
+e.g. `MT5_SERVER=Exness-MT5Trial9` → resolver returns an access-point
+`host:port` → MT5 authorises on `Exness-MT5Trial9`, AutoTrading on unless
+`MT5_ENABLE_ALGO_TRADING=0`.
 
 ## Resolution cascade
 
@@ -67,6 +69,7 @@ bootstraps a login), then rebuild the image.
 | Var | Default | Meaning |
 |---|---|---|
 | `MT5_SERVER_ADDR` | unset | Explicit `host:port` — skip resolution and connect here directly. |
+| `MT5_ENABLE_ALGO_TRADING` | `1` | Enables MT5 Expert/live trading in the startup ini. Set `0`, `false`, `no`, `off`, or `disabled` to opt out. |
 | `MT5_RESOLVER_URL` | `https://mt5.mtapi.io,http://mt5-resolver:80` | Comma-separated resolver base URLs, tried in order (after the baked table). |
 | `MT5_AUTORESOLVE` | `1` | `0` disables the network resolvers — use the baked table + name only. |
 | `MT5_SETUP_URL` | generic MT5 | A broker-branded installer URL (e.g. `.../exness5setup.exe`) to install instead of the generic terminal. Its bundled directory also resolves the broker by name. |

@@ -27,6 +27,7 @@ services:
       MT5_SERVER: ${MT5_SERVER:-}
       MT5_SERVER_ADDR: ${MT5_SERVER_ADDR:-}
       MT5_RESOLVER_URL: ${MT5_RESOLVER_URL:-https://mt5.mtapi.io,http://mt5-resolver:80}
+      MT5_ENABLE_ALGO_TRADING: ${MT5_ENABLE_ALGO_TRADING:-1}
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"

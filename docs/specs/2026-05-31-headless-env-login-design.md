@@ -21,7 +21,7 @@ with a throwaway Exness demo proved the working recipe and simplified the design
   a fresh volume can't resolve the broker server and login silently no-ops. With
   `servers.dat` seeded (the ~728 KB broker directory), the start.ini login
   authorizes headlessly with AutoTrading on. Verified: `/account` → login
-  436145944 on Exness-MT5Trial9, `trade_allowed` + `trade_expert` true, no VNC.
+  a demo account on Exness-MT5Trial9, `trade_allowed` + `trade_expert` true, no VNC.
 - **No programmatic endpoint for broker server data exists.** Research confirmed
   MetaQuotes treats it as proprietary; even MetaApi.cloud (commercial) requires
   uploading `servers.dat` per broker. So bundling `servers.dat` is the industry

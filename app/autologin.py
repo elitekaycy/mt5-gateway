@@ -6,6 +6,7 @@ MT5-coupled mechanism (seed servers.dat, launch the terminal with the ini).
 """
 
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,7 @@ class AutoLoginSettings:
     login: str
     password: str
     server: str
+    enable_algo_trading: bool = True
 
     @property
     def enabled(self) -> bool:
@@ -26,7 +28,15 @@ def load_settings(env) -> AutoLoginSettings:
         login=env.get("MT5_LOGIN", "").strip(),
         password=env.get("MT5_PASSWORD", ""),
         server=env.get("MT5_SERVER", "").strip(),
+        enable_algo_trading=_bool_env(env.get("MT5_ENABLE_ALGO_TRADING"), default=True),
     )
+
+
+def _bool_env(value: Optional[str], *, default: bool) -> bool:
+    """Parse a docker-friendly boolean env value."""
+    if value is None or value.strip() == "":
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off", "disabled"}
 
 
 def validate(s: AutoLoginSettings) -> None:
@@ -44,6 +54,7 @@ def render_start_ini(s: AutoLoginSettings) -> str:
     Exness-MT5Trial9 -> "[Common]\r\nLogin=123\r\nServer=Exness-MT5Trial9...".
     Windows CRLF — MT5 parses the config as a Windows ini.
     """
+    algo_enabled = "1" if s.enable_algo_trading else "0"
     lines = [
         "[Common]",
         f"Login={s.login}",
@@ -51,8 +62,8 @@ def render_start_ini(s: AutoLoginSettings) -> str:
         f"Server={s.server}",
         "",
         "[Experts]",
-        "AllowLiveTrading=1",
-        "Enabled=1",
-        "Account=1",
+        f"AllowLiveTrading={algo_enabled}",
+        f"Enabled={algo_enabled}",
+        f"Account={algo_enabled}",
     ]
     return "\r\n".join(lines) + "\r\n"

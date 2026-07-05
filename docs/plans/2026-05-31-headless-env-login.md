@@ -72,13 +72,13 @@ def test_login_absent_means_disabled():
 
 def test_load_settings_reads_and_strips():
     s = load_settings({
-        "MT5_LOGIN": " 436145944 ",
-        "MT5_PASSWORD": "Angelboy1@",
+        "MT5_LOGIN": " 12345678 ",
+        "MT5_PASSWORD": "example-password",
         "MT5_SERVER": " Exness-MT5Trial9 ",
     })
-    assert s.login == "436145944"
+    assert s.login == "12345678"
     assert s.server == "Exness-MT5Trial9"
-    assert s.password == "Angelboy1@"
+    assert s.password == "example-password"
     assert s.enabled is True
 
 
@@ -172,10 +172,10 @@ from autologin import render_start_ini
 
 
 def test_render_start_ini_has_login_block_and_autotrading():
-    s = AutoLoginSettings(login="436145944", password="pw", server="Exness-MT5Trial9")
+    s = AutoLoginSettings(login="12345678", password="pw", server="Exness-MT5Trial9")
     ini = render_start_ini(s)
     assert "[Common]" in ini
-    assert "Login=436145944" in ini
+    assert "Login=12345678" in ini
     assert "Password=pw" in ini
     assert "Server=Exness-MT5Trial9" in ini
     assert "[Experts]" in ini
@@ -562,7 +562,7 @@ docker cp <gateway>:"/config/.wine/drive_c/Program Files/MetaTrader 5/Config/ser
 - [ ] **Step 2: Cold-boot test (3×, real demo)**
 
 ```bash
-export MT5_LOGIN=436145944 MT5_PASSWORD='Angelboy1@' MT5_SERVER=Exness-MT5Trial9
+export MT5_LOGIN=12345678 MT5_PASSWORD='example-password' MT5_SERVER=Exness-MT5Trial9
 ./scripts/test-coldboot.sh 3
 ```
 Expected: `RESULT: 3/3 passed`.

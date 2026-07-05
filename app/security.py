@@ -11,6 +11,7 @@ from kill_switch import kill_switch
 logger = logging.getLogger(__name__)
 
 _AUTH_EXEMPT = {"/health/live"}
+_AUTH_EXEMPT_PREFIXES = ("/apidocs", "/apispec_", "/flasgger_static/")
 _KILL_GATED = {
     "/order",
     "/modify_sl_tp",
@@ -27,7 +28,7 @@ def install_security_hooks(app):
 
     @app.before_request
     def enforce_security():
-        if api_key and request.path not in _AUTH_EXEMPT:
+        if api_key and not _is_auth_exempt(request.path):
             supplied = request.headers.get("Authorization", "")
             expected = f"Bearer {api_key}"
             if not hmac.compare_digest(supplied, expected):
@@ -45,3 +46,7 @@ def install_security_hooks(app):
                     "error_type": "kill_switch_active",
                 }
             ), 423
+
+
+def _is_auth_exempt(path: str) -> bool:
+    return path in _AUTH_EXEMPT or path.startswith(_AUTH_EXEMPT_PREFIXES)

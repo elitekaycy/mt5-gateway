@@ -4,6 +4,15 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-07-14
+
+### Fixed
+
+- Truncated the order comment to 25 characters in the shared trade-request
+  builder, so long client comments no longer fail the native pre-trade check
+  with `(-2, 'Invalid "comment" argument')`; brokers keep at most a ~16-char
+  prefix and client identity travels in `client_order_id`.
+
 ## [0.3.4] - 2026-07-14
 
 ### Fixed

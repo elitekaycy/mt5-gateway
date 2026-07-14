@@ -4,6 +4,21 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-07-14
+
+### Fixed
+
+- Required a new MT5 authorization journal entry for each headless login attempt,
+  preventing retained success lines from deleting `start.ini` before a cold terminal
+  has loaded it.
+
+## [0.3.3] - 2026-07-13
+
+### Fixed
+
+- Passed order check and send request fields to the MT5 native bridge positionally
+  so Wine Python accepts the calls.
+
 ## [0.3.2] - 2026-07-05
 
 ### Added

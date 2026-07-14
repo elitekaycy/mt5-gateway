@@ -6,6 +6,7 @@ MT5-coupled mechanism (seed servers.dat, launch the terminal with the ini).
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 
@@ -45,6 +46,18 @@ def validate(s: AutoLoginSettings) -> None:
         raise ValueError("MT5_LOGIN set but MT5_SERVER is empty")
     if s.login and not s.password:
         raise ValueError("MT5_LOGIN set but MT5_PASSWORD is empty")
+
+
+def authorization_count(log_dir: Path) -> int:
+    """Count successful authorizations in retained MT5 terminal journals."""
+    count = 0
+    for log_path in log_dir.glob("*.log"):
+        try:
+            journal = log_path.read_text(encoding="utf-16-le", errors="ignore")
+        except OSError:
+            continue
+        count += journal.lower().count("authorized on")
+    return count
 
 
 def render_start_ini(s: AutoLoginSettings) -> str:

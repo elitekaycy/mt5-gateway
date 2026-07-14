@@ -37,3 +37,34 @@ def test_protection_requires_explicit_clear(position):
 def test_protection_must_be_finite_and_positive(position, value):
     with pytest.raises(OrderRequestError):
         build_sltp_request({"sl": value}, position, action=6)
+
+
+def _trade_request(comment):
+    from order_requests import build_trade_request
+
+    return build_trade_request(
+        action=5,
+        symbol="EURUSDm",
+        volume=0.01,
+        order_type=3,
+        price=1.1404,
+        deviation=20,
+        magic=10001,
+        comment=comment,
+        type_time=0,
+        type_filling=1,
+    )
+
+
+def test_comment_beyond_mt5_limit_is_truncated():
+    # 30 chars fails mt5.order_check with (-2, 'Invalid "comment" argument');
+    # the builder must never let a long comment reach the native API.
+    request = _trade_request("dsl-eurusd_metals_veto_fade--0")
+
+    assert request["comment"] == "dsl-eurusd_metals_veto_fade--0"[:25]
+
+
+def test_short_comment_is_unchanged():
+    request = _trade_request("audit-gtd-probe")
+
+    assert request["comment"] == "audit-gtd-probe"

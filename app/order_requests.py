@@ -9,6 +9,15 @@ class OrderRequestError(ValueError):
     """Raised when a trade request cannot be built safely."""
 
 
+# The native API rejects long comments before producing any retcode:
+# mt5.order_check/order_send fail with (-2, 'Invalid "comment" argument')
+# at roughly 30 characters, and brokers store at most ~16 anyway (Exness
+# keeps a 16-char prefix). Truncation loses nothing the venue would keep —
+# client identity travels in client_order_id / Idempotency-Key, never in
+# the comment.
+MAX_COMMENT_LENGTH = 25
+
+
 def build_trade_request(
     *,
     action: int,
@@ -33,7 +42,7 @@ def build_trade_request(
         "price": price,
         "deviation": deviation,
         "magic": magic,
-        "comment": comment,
+        "comment": comment[:MAX_COMMENT_LENGTH],
         "type_time": type_time,
         "type_filling": type_filling,
     }

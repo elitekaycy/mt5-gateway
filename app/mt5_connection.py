@@ -33,7 +33,11 @@ class SerializedMT5:
         @wraps(function)
         def serialized(*args: Any, **kwargs: Any) -> Any:
             with self._lock:
-                result = function(*args, **kwargs)
+                # MetaTrader5's request functions (order_check, order_send)
+                # reject any call made with a kwargs splat -- even an empty
+                # one -- returning None with (-2, 'Unnamed arguments not
+                # allowed'). Splat kwargs only when there are kwargs.
+                result = function(*args, **kwargs) if kwargs else function(*args)
                 if (
                     name not in {"last_error", "shutdown"}
                     and result is None

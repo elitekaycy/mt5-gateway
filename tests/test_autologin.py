@@ -5,7 +5,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "app"))
 
 import pytest
 
-from autologin import AutoLoginSettings, load_settings, render_start_ini, validate
+from autologin import (
+    AutoLoginSettings,
+    authorization_count,
+    load_settings,
+    render_start_ini,
+    validate,
+)
 
 
 def test_login_absent_means_disabled():
@@ -88,3 +94,20 @@ def test_render_start_ini_defaults_autotrading_on():
 def test_render_start_ini_uses_crlf():
     ini = render_start_ini(AutoLoginSettings(login="1", password="p", server="s"))
     assert "\r\n" in ini and ini.endswith("\r\n")
+
+
+def test_authorization_count_requires_a_new_journal_entry(tmp_path):
+    journal = tmp_path / "20260714.log"
+    journal.write_text(
+        "Network '123': authorized on Broker-Demo\r\n",
+        encoding="utf-16-le",
+    )
+    baseline = authorization_count(tmp_path)
+
+    assert baseline == 1
+    assert authorization_count(tmp_path) == baseline
+
+    with journal.open("a", encoding="utf-16-le") as handle:
+        handle.write("Network '123': authorized on Broker-Demo\r\n")
+
+    assert authorization_count(tmp_path) == baseline + 1

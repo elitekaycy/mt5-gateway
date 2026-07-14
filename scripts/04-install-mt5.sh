@@ -107,16 +107,13 @@ print(chr(10).join(connect_candidates(os.environ)))" > /tmp/mt5_candidates 2>/de
 from autologin import load_settings, render_start_ini; \
 open('$ini_lin', 'w', newline='').write(render_start_ini(load_settings(os.environ)))"
     }
+    authorization_count() {
+        python3 -c "import sys; from pathlib import Path; sys.path.insert(0, '/app'); \
+from autologin import authorization_count; \
+print(authorization_count(Path(sys.argv[1])))" "$jlogs"
+    }
     authorized() {
-        newest=""
-        for log_file in "$jlogs"/*.log; do
-            [ -e "$log_file" ] || continue
-            if [ -z "$newest" ] || [ "$log_file" -nt "$newest" ]; then
-                newest="$log_file"
-            fi
-        done
-        [ -n "$newest" ] && iconv -f UTF-16LE -t UTF-8 < "$newest" 2>/dev/null \
-            | grep -qi "authorized on"
+        [ "$(authorization_count)" -gt "$1" ]
     }
     first_candidate="$(head -n1 /tmp/mt5_candidates 2>/dev/null)"
 
@@ -126,12 +123,13 @@ open('$ini_lin', 'w', newline='').write(render_start_ini(load_settings(os.enviro
             [ -z "$candidate" ] && continue
             log_message "INFO" "Login attempt via '$candidate'."
             render_ini "$candidate"
+            authorization_baseline="$(authorization_count)"
             "$wine_executable" "$mt5exe" "/config:C:\\start.ini" &
             # The first attempt gets a longer window: the terminal cold-starts and
             # compiles before it can even attempt a login.
             tries=$([ "$first" -eq 1 ] && echo 36 || echo 18); first=0
             for _ in $(seq 1 "$tries"); do
-                authorized && { login_ok=1; break; }
+                authorized "$authorization_baseline" && { login_ok=1; break; }
                 sleep 5
             done
             [ "$login_ok" -eq 1 ] && { log_message "INFO" "Authorized via '$candidate'."; break; }

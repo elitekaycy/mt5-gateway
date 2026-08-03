@@ -58,6 +58,8 @@ RUN test -n "$WINE_LAYER_REV" && \
     overrides.path-to-regexp=0.1.13 \
     'overrides[socket.io-parser]=4.2.6' \
     overrides.ws=8.21.0 \
+    overrides.brace-expansion=1.1.17 \
+    'overrides[engine.io]=6.6.7' \
   && npm install --omit=dev --ignore-scripts \
   && cd / \
   && rm -rf /usr/lib/node_modules/npm \
@@ -112,7 +114,7 @@ RUN set -eux; \
   wget -qO /tmp/python.exe https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe; \
   printf '%s  %s\n' fb3d0466f3754752ca7fd839a09ffe53375ff2c981279fd4bc23a005458f7f5d /tmp/python.exe | sha256sum -c -; \
   wine /tmp/python.exe /quiet InstallAllUsers=1 PrependPath=1 Include_test=0; wineserver -w; \
-  wine python -m pip install --no-cache-dir --upgrade pip setuptools; wineserver -w; \
+  wine python -m pip install --no-cache-dir --upgrade pip 'setuptools>=78.1.1'; wineserver -w; \
   wine python -m pip install --no-cache-dir -r /tmp/requirements.txt; wineserver -w; \
   kill "$xvfb_pid" 2>/dev/null || true; \
   rm -f /tmp/mono.msi /tmp/python.exe

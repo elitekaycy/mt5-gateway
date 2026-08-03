@@ -8,6 +8,12 @@ from typing import Any, Callable, Optional
 
 import MetaTrader5 as _mt5
 
+from time_utils import (
+    derive_offset_from_server_epoch,
+    resolve_offset_seconds,
+    set_derived_offset,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -143,6 +149,7 @@ class MT5Connection:
                             },
                         )
                         self._set_status(ConnectionStatus.CONNECTED)
+                        self._refresh_server_offset()
                         return True
 
                 error_code, error_str = mt5.last_error()
@@ -170,6 +177,36 @@ class MT5Connection:
         logger.error(final_error)
         self._set_status(ConnectionStatus.DISCONNECTED, final_error)
         return False
+
+    def _refresh_server_offset(self) -> None:
+        """Derive the broker UTC offset from a fresh quote and cache it for GTD math.
+
+        Runs on every (re)connect so it re-derives across DST. Best-effort: an
+        explicit ``MT5_SERVER_UTC_OFFSET_SECONDS`` env is left to win, and a missing
+        or stale quote leaves the offset unresolved so GTD placement fails loud
+        rather than guessing UTC. Never propagates -- a derivation failure must not
+        fail an otherwise-healthy connection.
+        """
+        symbol = os.getenv("MT5_TIME_REFERENCE_SYMBOL", "EURUSD")
+        try:
+            mt5.symbol_select(symbol, True)
+            tick = mt5.symbol_info_tick(symbol)
+            if tick is None or not getattr(tick, "time", 0):
+                logger.warning("Broker UTC offset not derived: no quote for %s", symbol)
+                return
+            derived = derive_offset_from_server_epoch(tick.time, time.time())
+            if derived is not None:
+                set_derived_offset(derived)
+            logger.info(
+                "Broker UTC offset resolved",
+                extra={
+                    "offset_seconds": resolve_offset_seconds(),
+                    "reference_symbol": symbol,
+                    "derived": derived,
+                },
+            )
+        except Exception as error:
+            logger.warning("Broker UTC offset derivation skipped: %s", error)
 
     def ensure_connection(self) -> bool:
         if self.is_connected():

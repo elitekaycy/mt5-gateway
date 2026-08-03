@@ -202,6 +202,8 @@ to MT5 access-point addresses during first boot.
 | `API_KEY` | Optional bearer token required by API operations except `/health/live`; Swagger UI/spec assets remain readable so the UI can load. |
 | `CUSTOM_USER` / `PASSWORD` | VNC desktop credentials. |
 | `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` / `ERROR`. |
+| `MT5_SERVER_UTC_OFFSET_SECONDS` | Broker server-clock offset from UTC, in seconds (e.g. `10800` for a UTC+3/EEST server). Used to place GTD ("good-till-date") order expiries at the right instant. Leave unset to auto-derive it from a live quote at connect; set it to pin a fixed value, which always overrides auto-derivation. |
+| `MT5_TIME_REFERENCE_SYMBOL` | Symbol whose live quote auto-derives the server UTC offset at connect (default `EURUSD`). Set it to any symbol your broker quotes if `EURUSD` is unavailable. |
 
 ## Ports
 
@@ -320,7 +322,11 @@ network and an authenticated reverse proxy or mTLS. See
 - `/metrics` exposes Prometheus-compatible safety/connection counters.
 - `POST /kill` halts trading; `POST /kill/release` resumes it.
 - `GET /reconcile?magic=...` returns broker positions, orders, and recent deals.
-- Set `MT5_SERVER_UTC_OFFSET_SECONDS` if the broker encodes server-local epochs.
+- GTD ("good-till-date") order expiries are converted from UTC to broker-server
+  time using an offset auto-derived from a live quote at each connect (so it
+  re-derives across DST). Pin it with `MT5_SERVER_UTC_OFFSET_SECONDS` to override.
+  If neither the env nor a fresh quote yields an offset, a GTD order is rejected
+  rather than expiring at the wrong time.
 
 ## Contributing
 

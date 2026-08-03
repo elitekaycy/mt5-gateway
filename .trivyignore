@@ -1,0 +1,9 @@
+# GHSA-6v7p-g79w-8964 — msgpack out-of-bounds read / crash on malformed input.
+# No fix is installable on this image: the fix lands in msgpack >=1.2.1, which
+# requires Python >=3.10, and the Wine Python is pinned to 3.9.13 (see Dockerfile);
+# 1.1.2 is the newest 3.9-compatible release. msgpack is pulled in transitively by
+# MetaTrader5 and is used only for the local terminal<->python IPC inside the
+# container (trusted, same host) — the gateway's HTTP API is JSON, so the flaw is
+# not reachable from any network input. Remove this entry when the Wine Python is
+# bumped to >=3.10 and msgpack can move to >=1.2.1.
+GHSA-6v7p-g79w-8964

@@ -66,6 +66,7 @@ jobs:
           image-ref: elitekaycy/mt5-gateway-api:${{ steps.ver.outputs.version }}
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          trivyignores: .trivyignore
           scanners: vuln
           timeout: 30m0s
           exit-code: 1

@@ -181,22 +181,38 @@ class MT5Connection:
     def _refresh_server_offset(self) -> None:
         """Derive the broker UTC offset from a fresh quote and cache it for GTD math.
 
-        Runs on every (re)connect so it re-derives across DST. Best-effort: an
-        explicit ``MT5_SERVER_UTC_OFFSET_SECONDS`` env is left to win, and a missing
-        or stale quote leaves the offset unresolved so GTD placement fails loud
-        rather than guessing UTC. Never propagates -- a derivation failure must not
-        fail an otherwise-healthy connection.
+        Runs on every (re)connect so it re-derives across DST. A symbol just added
+        to Market Watch reports a stale quote before its first fresh tick, so this
+        polls ``symbol_info_tick`` up to ``MT5_TIME_DERIVE_ATTEMPTS`` times
+        (``MT5_TIME_DERIVE_DELAY`` seconds apart) until a quote is fresh enough to
+        round cleanly to a whole-hour offset. Best-effort: an explicit
+        ``MT5_SERVER_UTC_OFFSET_SECONDS`` env is left to win, and if no fresh quote
+        arrives (e.g. market closed) the offset stays unresolved so GTD placement
+        fails loud rather than guessing UTC. Never propagates -- a derivation
+        failure must not fail an otherwise-healthy connection.
         """
         symbol = os.getenv("MT5_TIME_REFERENCE_SYMBOL", "EURUSD")
+        attempts = int(os.getenv("MT5_TIME_DERIVE_ATTEMPTS", "10"))
+        delay = float(os.getenv("MT5_TIME_DERIVE_DELAY", "0.5"))
         try:
             mt5.symbol_select(symbol, True)
-            tick = mt5.symbol_info_tick(symbol)
-            if tick is None or not getattr(tick, "time", 0):
-                logger.warning("Broker UTC offset not derived: no quote for %s", symbol)
-                return
-            derived = derive_offset_from_server_epoch(tick.time, time.time())
+            derived = None
+            for attempt in range(attempts):
+                tick = mt5.symbol_info_tick(symbol)
+                if tick is not None and getattr(tick, "time", 0):
+                    derived = derive_offset_from_server_epoch(tick.time, time.time())
+                    if derived is not None:
+                        break
+                if attempt < attempts - 1:
+                    time.sleep(delay)
             if derived is not None:
                 set_derived_offset(derived)
+            else:
+                logger.warning(
+                    "Broker UTC offset not derived: no fresh quote for %s after %d attempts",
+                    symbol,
+                    attempts,
+                )
             logger.info(
                 "Broker UTC offset resolved",
                 extra={

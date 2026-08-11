@@ -1,0 +1,20 @@
+# GHSA-6v7p-g79w-8964 — msgpack out-of-bounds read / crash on malformed input.
+# No fix is installable on this image: the fix lands in msgpack >=1.2.1, which
+# requires Python >=3.10, and the Wine Python is pinned to 3.9.13 (see Dockerfile);
+# 1.1.2 is the newest 3.9-compatible release. msgpack is pulled in transitively by
+# MetaTrader5 and is used only for the local terminal<->python IPC inside the
+# container (trusted, same host) — the gateway's HTTP API is JSON, so the flaw is
+# not reachable from any network input. Remove this entry when the Wine Python is
+# bumped to >=3.10 and msgpack can move to >=1.2.1.
+GHSA-6v7p-g79w-8964
+
+# CVE-2025-47273 — setuptools path traversal when installing a crafted package.
+# The app's own setuptools is upgraded to >=78.1.1 (Wine Python holds 82.0.1; see
+# Dockerfile line ~115). The 70.3.0 copy Trivy still reports is a transient build
+# artifact from pip's build isolation while installing a pure-python sdist
+# (e.g. flasgger) — it is not present in the running container's environments
+# (verified: runtime holds setuptools 82.0.1 and Debian's 66.1.1, no 70.3.0). The
+# flaw is build-time only (triggered by installing an untrusted package), which the
+# gateway never does at runtime. Remove if the build stops leaving the isolated
+# build-env setuptools in an image layer.
+CVE-2025-47273

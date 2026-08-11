@@ -41,6 +41,7 @@ from order_requests import build_trade_request
 from order_time import apply_expiration
 from pretrade import PreTradeError, validate_order_intent, validate_price_band
 from retcodes import classify_retcode, success_state
+from time_utils import ServerOffsetUnavailable
 
 order_bp = Blueprint("order", __name__)
 logger = logging.getLogger(__name__)
@@ -288,7 +289,10 @@ def send_market_order_endpoint():
             tp=tp,
         )
 
-        apply_expiration(request_data, data)
+        try:
+            apply_expiration(request_data, data)
+        except ServerOffsetUnavailable as error:
+            return validation_error_response(str(error))
 
         logger.info(
             f"[{request_id}] Sending order to MT5: {json.dumps({k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v for k, v in request_data.items()})}"
@@ -560,7 +564,10 @@ def order_check_endpoint():
             tp=tp,
         )
 
-        apply_expiration(request_data, data)
+        try:
+            apply_expiration(request_data, data)
+        except ServerOffsetUnavailable as error:
+            return validation_error_response(str(error))
 
         result = mt5.order_check(request_data)
         if result is None:
@@ -1106,7 +1113,10 @@ def modify_order(ticket):
             "type_filling": mt5.ORDER_FILLING_RETURN,
         }
 
-        apply_expiration(request_data, data, existing_order=order)
+        try:
+            apply_expiration(request_data, data, existing_order=order)
+        except ServerOffsetUnavailable as error:
+            return validation_error_response(str(error))
 
         result = mt5.order_send(request_data)
 

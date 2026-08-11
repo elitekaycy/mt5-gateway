@@ -2,7 +2,9 @@ import threading
 import time
 from types import SimpleNamespace
 
+import mt5_connection
 from mt5_connection import SerializedMT5
+from time_utils import resolve_offset_seconds, set_derived_offset
 
 
 def test_serialized_mt5_prevents_concurrent_native_calls():
@@ -92,3 +94,63 @@ def test_wrapper_forwards_positional_only_calls_without_kwargs_splat():
     assert mt5.order_check({"action": 1}) is not None
     assert mt5.copy_rates_from("XAUUSD", timeframe=60) is not None
     assert calls == [("args", {"action": 1}), ("kwargs", "XAUUSD", 60)]
+
+
+def _fake_mt5_with_ticks(ticks):
+    """Fake MT5 whose symbol_info_tick returns each tick in turn, then the last."""
+    calls = {"n": 0}
+
+    class Fake:
+        def symbol_select(self, symbol, enable=True):
+            return True
+
+        def symbol_info_tick(self, symbol):
+            tick = ticks[min(calls["n"], len(ticks) - 1)]
+            calls["n"] += 1
+            return tick
+
+    return Fake(), calls
+
+
+def test_refresh_server_offset_retries_until_a_fresh_quote(monkeypatch):
+    # A symbol just added to Market Watch reports a stale quote before its first
+    # fresh tick; derivation must poll past the stale ticks rather than give up.
+    monkeypatch.delenv("MT5_SERVER_UTC_OFFSET_SECONDS", raising=False)
+    monkeypatch.setenv("MT5_TIME_DERIVE_ATTEMPTS", "5")
+    monkeypatch.setenv("MT5_TIME_DERIVE_DELAY", "0")
+    set_derived_offset(None)
+
+    now = int(time.time())
+    ticks = [
+        SimpleNamespace(time=now + 3 * 3600 - 5000),  # stale -> rejected
+        SimpleNamespace(time=now + 3 * 3600 - 5000),  # stale -> rejected
+        SimpleNamespace(time=now + 3 * 3600),  # fresh -> +3h
+    ]
+    fake, calls = _fake_mt5_with_ticks(ticks)
+    monkeypatch.setattr(mt5_connection, "mt5", fake)
+
+    mt5_connection.MT5Connection()._refresh_server_offset()
+
+    assert resolve_offset_seconds() == 3 * 3600
+    assert calls["n"] >= 3
+    set_derived_offset(None)
+
+
+def test_refresh_server_offset_stays_unresolved_without_a_fresh_quote(monkeypatch):
+    # Market closed / no fresh quote: derivation exhausts its attempts and leaves
+    # the offset unresolved (GTD then fails loud rather than guessing UTC).
+    monkeypatch.delenv("MT5_SERVER_UTC_OFFSET_SECONDS", raising=False)
+    monkeypatch.setenv("MT5_TIME_DERIVE_ATTEMPTS", "3")
+    monkeypatch.setenv("MT5_TIME_DERIVE_DELAY", "0")
+    set_derived_offset(None)
+
+    now = int(time.time())
+    stale = SimpleNamespace(time=now + 3 * 3600 - 5000)
+    fake, calls = _fake_mt5_with_ticks([stale, stale, stale])
+    monkeypatch.setattr(mt5_connection, "mt5", fake)
+
+    mt5_connection.MT5Connection()._refresh_server_offset()
+
+    assert resolve_offset_seconds() is None
+    assert calls["n"] == 3
+    set_derived_offset(None)

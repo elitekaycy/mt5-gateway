@@ -20,9 +20,26 @@ if [ -n "${MT5_SETUP_URL:-}" ] && [ -z "${MT5_SETUP_SHA256:-}" ]; then
     exit 1
 fi
 
-if [ -n "$(find_terminal)" ]; then
+# The terminal is normally seeded from the baked template (03-install-mono.sh),
+# so no installer runs at boot. Install at runtime only when the volume has no
+# terminal (a volume created before the template included MT5) or when a custom
+# MT5_SETUP_URL is set whose branded terminal was never installed — that is
+# recorded in this marker so later boots don't reinstall over the seeded volume.
+custom_marker="/config/.wine/drive_c/.mt5-setup-url"
+custom_pending=0
+if [ -n "${MT5_SETUP_URL:-}" ] && [ "$(cat "$custom_marker" 2>/dev/null)" != "$MT5_SETUP_URL" ]; then
+    custom_pending=1
+fi
+
+if [ -n "$(find_terminal)" ] && [ "$custom_pending" -eq 0 ]; then
     log_message "INFO" "MetaTrader 5 already installed at $(find_terminal)."
 else
+    if [ "$custom_pending" -eq 1 ]; then
+        # The branded terminal lands in its own broker-named directory; drop the
+        # baked generic one so the search can't keep picking it over the branded.
+        log_message "INFO" "MT5_SETUP_URL set; replacing the baked generic terminal."
+        rm -rf "$program_files/MetaTrader 5"
+    fi
     log_message "INFO" "MetaTrader 5 not installed. Installing from $installer_url..."
     "$wine_executable" reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f
     # The silent installer can spin forever under Wine (no terminal64.exe ever
@@ -54,6 +71,9 @@ mt5exe="$(find_terminal)"
 if [ -z "$mt5exe" ]; then
     log_message "ERROR" "MetaTrader 5 install failed. MT5 cannot be run."
     exit 1
+fi
+if [ "$custom_pending" -eq 1 ]; then
+    printf '%s' "$MT5_SETUP_URL" > "$custom_marker"
 fi
 
 mt5cfg="$(dirname "$mt5exe")/Config"

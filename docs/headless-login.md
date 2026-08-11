@@ -64,6 +64,22 @@ public directory. Run it occasionally (broker addresses change rarely, and MT5
 self-seeds the current directory on first connect, so a slightly stale table still
 bootstraps a login), then rebuild the image.
 
+## Baked terminal (no installer at boot)
+
+The MT5 terminal is installed **at image build time** into the seeded Wine
+template (`/opt/wine-template`), under a virtual display with the same
+timeout+retry watchdog the runtime installer used. A cold boot therefore never
+runs the GUI installer — it copies the terminal out of the template together
+with Mono/Python, then goes straight to login. What was baked is recorded in
+`/config/.wine/.mt5-install-info` (stub URL + checksum, install date, terminal
+build).
+
+MetaQuotes rotates the stub installer, so its SHA-256 is pinned in two places
+that must move together: `ARG MT5_SETUP_SHA256` in the `Dockerfile` (build-time
+install) and `mt5setup_sha256` in `scripts/02-common.sh` (runtime fallback for
+volumes created before the template included MT5). A rotation fails the build
+loudly — re-pin both.
+
 ## Tuning knobs (all optional)
 
 | Var | Default | Meaning |
@@ -72,8 +88,8 @@ bootstraps a login), then rebuild the image.
 | `MT5_ENABLE_ALGO_TRADING` | `1` | Enables MT5 Expert/live trading in the startup ini. Set `0`, `false`, `no`, `off`, or `disabled` to opt out. |
 | `MT5_RESOLVER_URL` | `https://mt5.mtapi.io,http://mt5-resolver:80` | Comma-separated resolver base URLs, tried in order (after the baked table). |
 | `MT5_AUTORESOLVE` | `1` | `0` disables the network resolvers — use the baked table + name only. |
-| `MT5_SETUP_URL` | generic MT5 | A broker-branded installer URL (e.g. `.../exness5setup.exe`) to install instead of the generic terminal. Its bundled directory also resolves the broker by name. |
-| `MT5_SETUP_ATTEMPTS` / `MT5_SETUP_TIMEOUT` | `3` / `600` | Install watchdog: bound each silent-install attempt (seconds) and retry, so a stuck Wine installer can't hang the boot forever. |
+| `MT5_SETUP_URL` | generic MT5 | A broker-branded installer URL (e.g. `.../exness5setup.exe`). Installs at runtime **over** the baked generic terminal (its bundled directory also resolves the broker by name); the install is recorded so later boots keep the branded terminal. |
+| `MT5_SETUP_ATTEMPTS` / `MT5_SETUP_TIMEOUT` | `3` / `600` | Watchdog for the runtime install path (custom `MT5_SETUP_URL`, or old volumes without a baked terminal): bound each silent-install attempt (seconds) and retry, so a stuck Wine installer can't hang the boot forever. |
 
 ## servers.dat (broker directory)
 

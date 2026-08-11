@@ -7,7 +7,9 @@ mt5file="/config/.wine/drive_c/Program Files/MetaTrader 5/terminal64.exe"
 python_url="https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe"
 python_sha256="fb3d0466f3754752ca7fd839a09ffe53375ff2c981279fd4bc23a005458f7f5d"
 mono_sha256="75b3f45dca1dc89857fe9e932da78710f64cc6d49ef1ab0c723a177085b4711b"
-mt5setup_sha256="d437fd760587d24e094864215b86a441cc64ab897cace2b2a21a46614b3f4e36"
+# Keep mt5setup_sha256 in sync with ARG MT5_SETUP_SHA256 in the Dockerfile —
+# MetaQuotes rotates the stub installer, so both must be re-pinned together.
+mt5setup_sha256="a879492dd9d7b168d0538edd1c0dc5604ca43dc0951825b3501818e8b18f4c93"
 wine_executable="wine"
 export mt5setup_url mt5file python_url python_sha256 mono_sha256 mt5setup_sha256
 export wine_executable

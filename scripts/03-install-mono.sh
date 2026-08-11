@@ -5,9 +5,11 @@ source /scripts/02-common.sh
 
 log_message "RUNNING" "03-install-mono.sh"
 
-# Seed a fresh volume from the baked template prefix (Mono + Python + MT5 libs), so
-# the display-less installs below are a fast copy instead of a ~10min re-install.
-# Only when the volume lacks them; MT5 itself is still installed at runtime.
+# Seed a fresh volume from the baked template prefix (Mono + Python + MT5 libs +
+# the MT5 terminal), so the installs below are a fast copy instead of a ~10min
+# re-install and a cold boot never runs an installer. Only when the volume lacks
+# them; volumes seeded before the template included MT5 still install it at
+# runtime in 04-install-mt5.sh.
 wine_template="${WINE_TEMPLATE:-/opt/wine-template}"
 if [ -d "$wine_template" ] && [ ! -e "/config/.wine/drive_c/windows/mono" ]; then
     log_message "INFO" "Seeding wineprefix from baked template..."

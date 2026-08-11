@@ -37,3 +37,7 @@ jobs:
           context: .
           push: false
           tags: mt5-gateway:test
+          # The Wine/Mono/Python/MT5 template layers are ~30+ min of downloads and
+          # Wine-side installs; reuse them across runs so a PR build is minutes.
+          cache-from: type=gha,scope=mt5-gateway
+          cache-to: type=gha,mode=max,scope=mt5-gateway

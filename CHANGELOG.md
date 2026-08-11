@@ -4,6 +4,22 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Baked the MT5 terminal into the image at build time (pinned, checksum-verified
+  stub installer run under a virtual display with a timeout+retry watchdog), so
+  a cold boot no longer runs the flaky GUI installer — the volume seeds the
+  terminal with the same fast copy as Mono/Python, and a MetaQuotes stub
+  rotation now fails the build loudly instead of every fresh-volume boot.
+- Updated the stale `mt5setup.exe` stub checksum (MetaQuotes had rotated it;
+  every fresh-volume boot failed checksum verification).
+- Kept `MT5_SETUP_URL` broker-branded installs working over the baked terminal:
+  the branded install replaces the generic one once and is recorded, so later
+  boots keep it.
+- CI build time: PR and release builds now reuse the heavy Wine/MT5 layers via
+  the GitHub Actions cache; release builds bust only the MT5 layer
+  (`MT5_LAYER_REV`) so each published image bakes the freshest terminal.
+
 ## [0.3.5] - 2026-07-14
 
 ### Fixed

@@ -109,7 +109,8 @@ MT5_ENABLE_ALGO_TRADING=1        # default: 1; set 0 to disable Expert/live trad
 API_KEY=change-this-long-random-token
 ```
 
-That's it — one container, no VNC. On first boot MT5 installs, resolves the server
+That's it — one container, no VNC. MT5 is baked into the image (no installer ever
+runs at boot); on first boot the gateway seeds the volume, resolves the server
 name to an address, logs in with AutoTrading enabled by default, and the API comes
 up on `http://localhost:5001`. Leave `MT5_LOGIN` empty to instead log in by hand
 via the VNC desktop on `http://localhost:3000` (kept for diagnostics either way).
@@ -144,7 +145,7 @@ network or authenticated reverse proxy:
 ```yaml
 services:
   mt5:
-    image: elitekaycy/mt5-gateway-api:0.3.2
+    image: elitekaycy/mt5-gateway-api:0.3.8
     restart: unless-stopped
     env_file: .env
     environment:
@@ -212,16 +213,16 @@ to MT5 access-point addresses during first boot.
 
 ## Image size and production profile
 
-The current `0.3.2`/`latest` image is intentionally self-contained: MT5 runs under
-Wine, and the Wine prefix includes Windows Python plus the MetaTrader5 Python
-package so a fresh volume boots quickly. On the current published `0.3.1` image,
-the audit showed:
+The published image is intentionally self-contained: MT5 runs under Wine, and
+the Wine prefix includes Windows Python, the MetaTrader5 Python package, and the
+MT5 terminal itself, so a fresh volume boots quickly. On the published `0.3.1`
+image, the audit showed:
 
 | Area | Approx size | Why it exists |
 |---|---:|---|
 | Docker Hub compressed layers | 2.75 GB | Network pull size for amd64 image layers. |
 | Local Docker image | 7.78 GB | Expanded image plus Docker layer accounting. |
-| `/opt/wine-template` | 2.0 GB | Preseeded Wine/Windows Python/MT5 Python deps; avoids slow first boot. |
+| `/opt/wine-template` | 2.0 GB | Preseeded Wine prefix with Windows Python, MT5 Python deps, and the MT5 terminal itself; a cold boot never runs an installer. |
 | `/opt/wine-stable` | 1.5 GB | Wine runtime required to run MT5. |
 | KasmVNC/base desktop stack | ~2.1 GB layer | Browser VNC desktop for diagnostics/manual login. |
 | App code | <1 MB | Flask API and broker resolver are not the size driver. |

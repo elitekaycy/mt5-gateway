@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-08-11
+
 ### Fixed
 
 - Baked the MT5 terminal into the image at build time (pinned, checksum-verified

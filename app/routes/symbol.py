@@ -5,7 +5,7 @@ from flask import Blueprint, jsonify, request
 
 from decorators import require_mt5_connection
 from errors import internal_error_response, not_found_response
-from lib import validate_symbol
+from lib import invalidate_symbol, validate_symbol
 from mt5_connection import mt5
 
 symbol_bp = Blueprint("symbol", __name__)
@@ -90,6 +90,10 @@ def get_symbol_info_tick_endpoint(symbol):
 
         tick = mt5.symbol_info_tick(symbol)
         if tick is None:
+            # A cached symbol returning no tick may have dropped from Market
+            # Watch (e.g. terminal restart); evict so the next request
+            # re-selects it, preserving the previous self-healing behaviour.
+            invalidate_symbol(symbol)
             return not_found_response("symbol tick info", symbol)
 
         return jsonify(tick._asdict())
@@ -133,6 +137,7 @@ def get_symbol_info(symbol):
 
         symbol_info = mt5.symbol_info(symbol)
         if symbol_info is None:
+            invalidate_symbol(symbol)
             return not_found_response("symbol info", symbol)
 
         return jsonify(symbol_info._asdict())

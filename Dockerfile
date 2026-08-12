@@ -56,9 +56,9 @@ RUN test -n "$WINE_LAYER_REV" && \
     overrides.jake.minimatch=3.1.4 \
     overrides.filelist.minimatch=5.1.8 \
     overrides.path-to-regexp=0.1.13 \
-    'overrides[socket.io-parser]=4.2.6' \
+    'overrides[socket.io-parser]=4.2.7' \
     overrides.ws=8.21.0 \
-    overrides.brace-expansion=1.1.17 \
+    overrides.brace-expansion=1.1.18 \
     'overrides[engine.io]=6.6.7' \
   && npm install --omit=dev --ignore-scripts \
   && cd / \

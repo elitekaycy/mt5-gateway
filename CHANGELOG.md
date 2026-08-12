@@ -4,6 +4,15 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-08-12
+
+### Fixed
+
+- Bumped the kclient npm overrides `brace-expansion` 1.1.17 → 1.1.18
+  (CVE-2026-69152) and `socket.io-parser` 4.2.6 → 4.2.7 (CVE-2026-69185),
+  which Trivy flagged as HIGH on the 0.3.8 release candidate and blocked the
+  image publish.
+
 ## [0.3.8] - 2026-08-11
 
 ### Fixed

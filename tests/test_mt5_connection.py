@@ -154,3 +154,131 @@ def test_refresh_server_offset_stays_unresolved_without_a_fresh_quote(monkeypatc
     assert resolve_offset_seconds() is None
     assert calls["n"] == 3
     set_derived_offset(None)
+
+
+_DEFAULT_ACCOUNT = object()
+
+
+class _CountingAccountInfoMT5:
+    """Fake MT5 that counts account_info probes; configurable failure modes."""
+
+    def __init__(self, account_info_result=_DEFAULT_ACCOUNT, initialize_result=False):
+        self.probes = 0
+        self._account_info_result = account_info_result
+        self._initialize_result = initialize_result
+
+    def account_info(self):
+        self.probes += 1
+        time.sleep(0.01)  # force overlap so concurrency tests are meaningful
+        return self._account_info_result
+
+    def initialize(self):
+        return self._initialize_result
+
+    def last_error(self):
+        return (1, "Success")
+
+
+def _verified_connection(monkeypatch, fake, ttl="30"):
+    """A CONNECTED MT5Connection backed by `fake`, with a stale option."""
+    monkeypatch.setenv("MT5_CONNECTION_VERIFY_TTL_SECONDS", ttl)
+    monkeypatch.setenv("MT5_RECONNECT_ATTEMPTS", "1")
+    monkeypatch.setattr(mt5_connection, "mt5", fake)
+    conn = mt5_connection.MT5Connection()
+    conn._set_status(mt5_connection.ConnectionStatus.CONNECTED)
+    return conn
+
+
+def test_ensure_connection_skips_probe_within_verify_ttl(monkeypatch):
+    fake = _CountingAccountInfoMT5()
+    conn = _verified_connection(monkeypatch, fake)
+
+    assert conn.ensure_connection() is True
+    assert conn.ensure_connection() is True
+    assert fake.probes == 0
+
+
+def test_ensure_connection_probes_once_per_ttl_window(monkeypatch):
+    fake = _CountingAccountInfoMT5()
+    conn = _verified_connection(monkeypatch, fake)
+    conn._last_verified_at = 0.0  # force the TTL window shut
+
+    assert conn.ensure_connection() is True
+    assert conn.ensure_connection() is True
+    assert fake.probes == 1
+
+
+def test_ensure_connection_serializes_probe_under_concurrency(monkeypatch):
+    fake = _CountingAccountInfoMT5()
+    conn = _verified_connection(monkeypatch, fake)
+    conn._last_verified_at = 0.0
+
+    threads = [threading.Thread(target=conn.ensure_connection) for _ in range(12)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert conn.is_connected()
+    assert fake.probes == 1
+
+
+def test_failed_probe_marks_disconnected_and_reconnects(monkeypatch):
+    fake = _CountingAccountInfoMT5(account_info_result=None)
+    conn = _verified_connection(monkeypatch, fake)
+    conn._last_verified_at = 0.0
+
+    # Probe fails; reconnect path runs (initialize False -> still disconnected).
+    assert conn.ensure_connection() is False
+    assert conn.get_status() is mt5_connection.ConnectionStatus.DISCONNECTED
+    assert fake.probes == 1
+
+
+def test_ipc_failure_callback_marks_connection_disconnected():
+    class FailingMT5:
+        @staticmethod
+        def symbol_info_tick(symbol):
+            return None
+
+        @staticmethod
+        def last_error():
+            return (-10004, "IPC connect failed")
+
+    conn = mt5_connection.MT5Connection()
+    conn._set_status(mt5_connection.ConnectionStatus.CONNECTED)
+
+    mt5 = SerializedMT5(FailingMT5())
+    mt5.set_connection_failure_callback(conn.note_connection_failure)
+    assert mt5.symbol_info_tick("EURUSD") is None
+
+    assert conn.get_status() is mt5_connection.ConnectionStatus.DISCONNECTED
+    assert "IPC failure" in conn.get_last_error()
+
+
+def test_non_ipc_none_result_keeps_connection_connected():
+    class BenignNoneMT5:
+        @staticmethod
+        def symbol_info_tick(symbol):
+            return None
+
+        @staticmethod
+        def last_error():
+            return (1, "Success")
+
+    conn = mt5_connection.MT5Connection()
+    conn._set_status(mt5_connection.ConnectionStatus.CONNECTED)
+
+    mt5 = SerializedMT5(BenignNoneMT5())
+    mt5.set_connection_failure_callback(conn.note_connection_failure)
+    assert mt5.symbol_info_tick("EURUSD") is None
+
+    assert conn.is_connected()
+
+
+def test_is_ipc_failure_classification():
+    assert mt5_connection.is_ipc_failure((-10000, "internal fail"))
+    assert mt5_connection.is_ipc_failure((-10005, "IPC timeout"))
+    assert not mt5_connection.is_ipc_failure((-2, "invalid params"))
+    assert not mt5_connection.is_ipc_failure((1, "Success"))
+    assert not mt5_connection.is_ipc_failure(None)
+    assert not mt5_connection.is_ipc_failure("not a tuple")

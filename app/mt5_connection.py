@@ -16,6 +16,22 @@ from time_utils import (
 
 logger = logging.getLogger(__name__)
 
+# MetaTrader5 last_error codes <= -10000 are internal IPC failures
+# (RES_E_INTERNAL_FAIL, _SEND, _RECEIVE, _INIT, _CONNECT, _TIMEOUT): the
+# terminal-side connection is gone. Benign None results (unknown symbol, no
+# history match) carry higher codes.
+MT5_IPC_FAILURE_CODE = -10000
+
+
+def is_ipc_failure(error: Any) -> bool:
+    """Return True when a ``last_error()`` tuple reports an internal IPC failure."""
+    return (
+        isinstance(error, tuple)
+        and len(error) >= 1
+        and isinstance(error[0], int)
+        and error[0] <= MT5_IPC_FAILURE_CODE
+    )
+
 
 class SerializedMT5:
     """Serialize access to the process-global MetaTrader5 IPC client."""
@@ -25,6 +41,18 @@ class SerializedMT5:
         self._lock = RLock()
         self._local = local()
         self._wrappers: dict[str, Callable[..., Any]] = {}
+        self._connection_failure_callback: Optional[Callable[[Any], None]] = None
+
+    def set_connection_failure_callback(
+        self, callback: Optional[Callable[[Any], None]]
+    ) -> None:
+        """Register a hook invoked with the ``last_error`` of IPC-level failures.
+
+        Invoked inside the serialized boundary when a call returns None with an
+        internal/IPC ``last_error`` code, so the callback must not make MT5
+        calls itself.
+        """
+        self._connection_failure_callback = callback
 
     def __getattr__(self, name: str) -> Any:
         attribute = getattr(self._module, name)
@@ -55,6 +83,11 @@ class SerializedMT5:
                         logger.error(
                             "mt5.order_send returned None - last_error=%s", error
                         )
+                    if (
+                        is_ipc_failure(error)
+                        and self._connection_failure_callback is not None
+                    ):
+                        self._connection_failure_callback(error)
                 return result
 
         return serialized
@@ -91,6 +124,11 @@ class MT5Connection:
         self._last_error: Optional[str] = None
         self._max_reconnect_attempts = int(os.getenv("MT5_RECONNECT_ATTEMPTS", "3"))
         self._base_delay = float(os.getenv("MT5_RECONNECT_BASE_DELAY", "1.0"))
+        self._verify_ttl_seconds = float(
+            os.getenv("MT5_CONNECTION_VERIFY_TTL_SECONDS", "30")
+        )
+        self._last_verified_at = 0.0
+        self._verify_lock = Lock()
         self._reconnect_lock = Lock()
 
     @classmethod
@@ -105,6 +143,10 @@ class MT5Connection:
         old_status = self._status
         self._status = new_status
         self._last_error = error
+
+        if new_status == ConnectionStatus.CONNECTED:
+            # A freshly (re)connected and reconciled session counts as verified.
+            self._last_verified_at = time.monotonic()
 
         if old_status != new_status:
             logger.info(
@@ -224,18 +266,59 @@ class MT5Connection:
         except Exception as error:
             logger.warning("Broker UTC offset derivation skipped: %s", error)
 
-    def ensure_connection(self) -> bool:
+    def note_connection_failure(self, error: Any) -> None:
+        """Mark the connection disconnected after an IPC-level MT5 call failure.
+
+        Called by the ``SerializedMT5`` boundary when a call returns None with
+        an internal/IPC ``last_error`` code, so the next request runs the full
+        reconnect-and-reconcile path instead of trusting a dead session. Benign
+        None results (non-IPC error codes) never reach this hook.
+        """
         if self.is_connected():
+            self._set_status(ConnectionStatus.DISCONNECTED, f"MT5 IPC failure: {error}")
+
+    def _verification_fresh(self) -> bool:
+        """Return True while the last live verification is inside the TTL."""
+        return (time.monotonic() - self._last_verified_at) < self._verify_ttl_seconds
+
+    def _verify_live_connection(self) -> bool:
+        """Re-verify a connected session with one ``account_info()`` round trip.
+
+        Serialized on ``_verify_lock`` with a double-checked freshness test so
+        a burst of concurrent requests pays for a single probe per TTL window.
+        A failed probe marks the connection DISCONNECTED.
+        """
+        with self._verify_lock:
+            if not self.is_connected():
+                return False
+            if self._verification_fresh():
+                return True
             try:
                 account_info = mt5.account_info()
                 if account_info is not None:
+                    self._last_verified_at = time.monotonic()
                     return True
-                else:
-                    logger.warning("MT5 connection lost, account_info returned None")
-                    self._set_status(ConnectionStatus.DISCONNECTED, "Connection lost")
+                logger.warning("MT5 connection lost, account_info returned None")
+                self._set_status(ConnectionStatus.DISCONNECTED, "Connection lost")
             except Exception as e:
                 logger.warning(f"MT5 connection check failed: {str(e)}")
                 self._set_status(ConnectionStatus.DISCONNECTED, str(e))
+            return False
+
+    def ensure_connection(self) -> bool:
+        """Return True when the MT5 session is usable, reconnecting if needed.
+
+        Cheap in the steady connected state: while CONNECTED, the cached state
+        is trusted and a live ``account_info()`` probe runs at most once per
+        ``MT5_CONNECTION_VERIFY_TTL_SECONDS`` window (default 30s; 0 restores
+        probing on every call). Disconnects are otherwise detected immediately
+        via ``note_connection_failure`` from the serialized IPC boundary.
+        """
+        if self.is_connected():
+            if self._verification_fresh():
+                return True
+            if self._verify_live_connection():
+                return True
 
         if not self._reconnect_lock.acquire(blocking=False):
             logger.warning("MT5 reconnect already in progress; failing fast")
@@ -271,3 +354,10 @@ class MT5Connection:
                 logger.error(f"Error during MT5 shutdown: {str(e)}")
             finally:
                 self._set_status(ConnectionStatus.DISCONNECTED)
+
+
+# IPC-level call failures (terminal dropped) flip the singleton connection to
+# DISCONNECTED so the next ensure_connection() runs the full reconnect path.
+mt5.set_connection_failure_callback(
+    lambda error: MT5Connection.get_instance().note_connection_failure(error)
+)

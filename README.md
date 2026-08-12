@@ -145,7 +145,7 @@ network or authenticated reverse proxy:
 ```yaml
 services:
   mt5:
-    image: elitekaycy/mt5-gateway-api:0.3.8
+    image: elitekaycy/mt5-gateway-api:0.3.9
     restart: unless-stopped
     env_file: .env
     environment:

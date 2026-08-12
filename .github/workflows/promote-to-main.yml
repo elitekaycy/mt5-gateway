@@ -1,21 +1,26 @@
 name: promote-to-main
 
 # Manual promotion: dev -> main. A maintainer triggers this from the Actions tab
-# (or `gh workflow run promote-to-main.yml`) after inspecting dev. It verifies the
-# latest check run on dev passed, fast-forwards main to dev, then triggers the
-# image build on main (the fast-forward push uses GITHUB_TOKEN, which by design
-# does not itself trigger another workflow, so docker.yml is dispatched explicitly).
+# (or `gh workflow run promote-to-main.yml`) after inspecting dev. Branch
+# protection blocks direct pushes and fast-forwards, and merges made with
+# GITHUB_TOKEN do not themselves trigger other workflows — so promotion works
+# through a PR: verify dev is green, build a promote branch (dev + a merge of
+# main, so the squash-only history still merges cleanly), wait for its checks,
+# squash-merge, tag the release, then dispatch the image build on main.
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: write
   actions: write
 
 jobs:
   promote:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
@@ -23,8 +28,6 @@ jobs:
           fetch-depth: 0
 
       - name: Verify check passed on dev
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           conclusion=$(gh run list --workflow check.yml --branch dev \
@@ -35,22 +38,79 @@ jobs:
             exit 1
           fi
 
-      - name: Fast-forward main to dev
-        run: git push origin HEAD:refs/heads/main
-
-      - name: Trigger image build on main
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run docker.yml --ref main
-
-      - name: Tag and publish release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Guard version and tag
         run: |
-          version="v$(cat VERSION)"
-          if ! git rev-parse "$version" >/dev/null 2>&1; then
-            git tag "$version"
-            git push origin "$version"
+          set -e
+          version="$(cat VERSION)"
+          echo "version=$version" >> "$GITHUB_ENV"
+          git fetch origin main --tags
+          if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::tag v$version already exists — bump VERSION on dev before promoting"
+            exit 1
           fi
-          gh release view "$version" >/dev/null 2>&1 ||
-            gh release create "$version" --generate-notes --title "$version"
+
+      - name: Build promote branch (dev + merge of main)
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="promote/$version"
+          git checkout -B "$branch" origin/dev
+          if ! git merge origin/main --no-edit; then
+            # Auto-resolve only VERSION (dev's side wins); anything else needs a
+            # human — abort and list the conflicting files.
+            git checkout --ours VERSION && git add VERSION || true
+            if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+              echo "::error::conflicts beyond VERSION need manual resolution:"
+              git diff --name-only --diff-filter=U
+              exit 1
+            fi
+            git commit --no-edit
+          fi
+          git push -f origin "$branch"
+
+      - name: Open or reuse promote PR
+        id: pr
+        run: |
+          set -e
+          branch="promote/$version"
+          url=$(gh pr list --head "$branch" --base main --state open --json url --jq '.[0].url' || true)
+          if [ -z "$url" ]; then
+            url=$(gh pr create --base main --head "$branch" \
+              --title "chore: promote gateway $version" \
+              --body "Automated promote dev → main for $version (promote-to-main workflow).")
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "promote PR: $url"
+
+      - name: Wait for promote PR checks
+        run: |
+          set -e
+          branch="promote/$version"
+          for i in $(seq 1 45); do
+            sleep 60
+            if out=$(gh pr checks "$branch" 2>&1); then
+              echo "checks green"
+              exit 0
+            fi
+            if echo "$out" | grep -qiE '\bfail|error'; then
+              echo "::error::promote PR checks failed:"
+              echo "$out"
+              exit 1
+            fi
+            echo "checks pending ($i/45)"
+          done
+          echo "::error::timed out waiting for promote PR checks"
+          exit 1
+
+      - name: Merge, tag, release, dispatch image build
+        run: |
+          set -e
+          branch="promote/$version"
+          gh pr merge "$branch" --squash --delete-branch
+          git fetch origin main
+          sha=$(git rev-parse origin/main)
+          gh release create "v$version" --generate-notes --title "v$version" --target "$sha"
+          # GITHUB_TOKEN merges do not trigger push workflows, so dispatch the
+          # image build explicitly.
+          gh workflow run docker.yml --ref main

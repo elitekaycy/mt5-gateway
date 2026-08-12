@@ -1,4 +1,6 @@
 import logging
+import threading
+from collections import OrderedDict
 
 import pandas as pd
 
@@ -8,6 +10,13 @@ from retcodes import classify_retcode
 from time_utils import server_epoch_to_utc
 
 logger = logging.getLogger(__name__)
+
+# Successful symbol_select(symbol, True) outcomes are stable for a container's
+# lifetime, so they are cached to keep read-only endpoints at one IPC call.
+# Bounded with FIFO eviction; guarded by a lock for the waitress thread pool.
+_SYMBOL_SELECT_CACHE_MAX_SIZE = 512
+_symbol_select_cache: "OrderedDict[str, None]" = OrderedDict()
+_symbol_select_cache_lock = threading.Lock()
 
 
 def get_timeframe(timeframe_str: str) -> MT5Timeframe:
@@ -20,16 +29,40 @@ def get_timeframe(timeframe_str: str) -> MT5Timeframe:
         )
 
 
-def validate_symbol(symbol_name):
+def validate_symbol(symbol_name: str) -> bool:
     """
     Checks if a symbol exists and is selected in Market Watch.
     If not selected, attempts to select it.
     Returns True if valid/selected, False otherwise.
+
+    Successful selections are cached, so a symbol already selected this
+    container lifetime costs no IPC call. Failures are not cached: invalid
+    symbols are re-checked (and rejected) on every call, as before.
     """
+    with _symbol_select_cache_lock:
+        if symbol_name in _symbol_select_cache:
+            return True
+
     if not mt5.symbol_select(symbol_name, True):
         logger.error(f"Failed to select symbol: {symbol_name}")
         return False
+
+    with _symbol_select_cache_lock:
+        if len(_symbol_select_cache) >= _SYMBOL_SELECT_CACHE_MAX_SIZE:
+            _symbol_select_cache.popitem(last=False)
+        _symbol_select_cache[symbol_name] = None
     return True
+
+
+def invalidate_symbol(symbol_name: str) -> None:
+    """
+    Drops a symbol from the selection cache so the next validate_symbol call
+    re-selects it in Market Watch. Used when a cached symbol's data call
+    returns None (e.g. the terminal restarted and lost its Market Watch),
+    preserving the previous self-healing re-select behaviour.
+    """
+    with _symbol_select_cache_lock:
+        _symbol_select_cache.pop(symbol_name, None)
 
 
 def get_symbol_filling_mode(symbol_name):

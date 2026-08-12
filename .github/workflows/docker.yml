@@ -1,17 +1,23 @@
 name: docker
 
 # Build the gateway image and push it to Docker Hub (elitekaycy/mt5-gateway-api).
-# Replaces the previous manual `docker build` + `docker push`. Fires when main
-# advances (the promote-to-main flow) and on version tags, plus manual dispatch.
+# Fires when main advances (via the promote-to-main flow's explicit dispatch —
+# GITHUB_TOKEN merges don't trigger push workflows) and on manual dispatch.
 #
-# Tags published: `latest` (main only), the VERSION file value, the git tag (on
-# v* tag pushes), and a `sha-<commit>` tag for precise pinning.
+# One build per release publishes every tag: `latest` (main only), the VERSION
+# file value, the `v`-prefixed form, and a `sha-<commit>` tag for precise
+# pinning. Tag pushes deliberately do NOT trigger this workflow: a second build
+# of the same commit races the first and overwrites the shared tags with a
+# different digest.
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
+
+concurrency:
+  group: docker-publish
+  cancel-in-progress: false
 
 jobs:
   build-and-push:
@@ -28,10 +34,6 @@ jobs:
         id: ver
         run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
 
-      - name: Verify tag matches VERSION
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: test "${GITHUB_REF_NAME#v}" = "$(cat VERSION)"
-
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Derive image tags
@@ -42,7 +44,7 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ steps.ver.outputs.version }}
-            type=ref,event=tag
+            type=raw,value=v${{ steps.ver.outputs.version }}
             type=sha
 
       - name: Log in to Docker Hub

@@ -4,6 +4,17 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Release flow: publish the image exactly once per release — tag pushes no
+  longer trigger a second build that raced the first and overwrote the shared
+  Hub tags with a different digest; the `v`-prefixed tag now ships from the
+  same build.
+- `promote-to-main` works with branch protection again: it promotes through a
+  PR (dev + merge of main), waits for checks, squash-merges, tags the release,
+  and dispatches the image build, instead of a fast-forward push GitHub
+  rejects.
+
 ## [0.3.9] - 2026-08-12
 
 ### Fixed

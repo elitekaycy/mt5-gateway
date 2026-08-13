@@ -148,7 +148,10 @@ def test_stop_limit_order_accepts_and_forwards_stoplimit(client, monkeypatch):
     monkeypatch.setattr(
         order_route.mt5,
         "order_send",
-        lambda request: (calls.append(request) or OrderResult(10008, "placed", 0.1, 1.154, 10, 0, 0, 0)),
+        lambda request: (
+            calls.append(request)
+            or OrderResult(10008, "placed", 0.1, 1.154, 10, 0, 0, 0)
+        ),
         raising=False,
     )
 

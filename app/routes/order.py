@@ -228,9 +228,14 @@ def send_market_order_endpoint():
             except NumericValidationError as error:
                 return validation_error_response(str(error))
 
-            if order_type in (mt5.ORDER_TYPE_BUY_STOP_LIMIT, mt5.ORDER_TYPE_SELL_STOP_LIMIT):
+            if order_type in (
+                mt5.ORDER_TYPE_BUY_STOP_LIMIT,
+                mt5.ORDER_TYPE_SELL_STOP_LIMIT,
+            ):
                 if "stoplimit" not in data:
-                    return validation_error_response("stoplimit required for stop-limit orders")
+                    return validation_error_response(
+                        "stoplimit required for stop-limit orders"
+                    )
                 try:
                     stoplimit = normalize_price(data["stoplimit"], symbol_info)
                 except NumericValidationError as error:

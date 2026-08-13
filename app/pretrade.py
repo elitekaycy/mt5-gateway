@@ -13,6 +13,7 @@ ALLOWED_ORDER_FIELDS = {
     "volume",
     "type",
     "price",
+    "stoplimit",
     "sl",
     "tp",
     "deviation",

@@ -68,3 +68,23 @@ def test_short_comment_is_unchanged():
     request = _trade_request("audit-gtd-probe")
 
     assert request["comment"] == "audit-gtd-probe"
+
+
+def test_stop_limit_price_is_retained_in_trade_request():
+    from order_requests import build_trade_request
+
+    request = build_trade_request(
+        action=5,
+        symbol="EURUSDm",
+        volume=0.01,
+        order_type=6,
+        price=1.1540,
+        deviation=20,
+        magic=10001,
+        comment="stop-limit",
+        type_time=0,
+        type_filling=1,
+        stoplimit=1.1538,
+    )
+
+    assert request["stoplimit"] == 1.1538

@@ -4,6 +4,28 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-08-12
+
+### Changed
+
+- Reduced steady-state MT5 read request cost by trusting a verified connection
+  for `MT5_CONNECTION_VERIFY_TTL_SECONDS` (default 30s) and relying on
+  serialized IPC failure detection to mark the session disconnected immediately.
+- Cached successful `symbol_select(symbol, True)` results, keeping hot read
+  endpoints from re-selecting the same symbol on every request while still
+  evicting cached symbols when tick/info calls return `None`.
+
+### Fixed
+
+- Release flow: publish the image exactly once per release — tag pushes no
+  longer trigger a second build that raced the first and overwrote the shared
+  Hub tags with a different digest; the `v`-prefixed tag now ships from the
+  same build.
+- `promote-to-main` works with branch protection again: it promotes through a
+  PR (dev + merge of main), waits for checks, squash-merges, tags the release,
+  and dispatches the image build, instead of a fast-forward push GitHub
+  rejects.
+
 ## [0.3.9] - 2026-08-12
 
 ### Fixed

@@ -32,6 +32,7 @@ def build_trade_request(
     type_filling: int,
     sl: Optional[float] = None,
     tp: Optional[float] = None,
+    stoplimit: Optional[float] = None,
 ) -> dict[str, Any]:
     """Build the canonical request shared by order-check and order-send."""
     request = {
@@ -50,6 +51,8 @@ def build_trade_request(
         request["sl"] = sl
     if tp is not None:
         request["tp"] = tp
+    if stoplimit is not None:
+        request["stoplimit"] = stoplimit
     return request
 
 

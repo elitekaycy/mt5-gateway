@@ -32,6 +32,8 @@ def client(monkeypatch):
             digits=5,
             trade_tick_size=0.00001,
             filling_mode=2,
+            trade_freeze_level=0,
+            point=0.00001,
         ),
         raising=False,
     )
@@ -139,3 +141,29 @@ def test_none_outcome_is_ambiguous_and_replayed(client, monkeypatch):
     assert first.get_json()["error_type"] == "unknown_outcome"
     assert second.status_code == 502
     assert len(calls) == 1
+
+
+def test_stop_limit_order_accepts_and_forwards_stoplimit(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        order_route.mt5,
+        "order_send",
+        lambda request: (calls.append(request) or OrderResult(10008, "placed", 0.1, 1.154, 10, 0, 0, 0)),
+        raising=False,
+    )
+
+    response = client.post(
+        "/order",
+        json={
+            "symbol": "EURUSD",
+            "volume": 0.1,
+            "type": "BUY_STOP_LIMIT",
+            "price": 1.1540,
+            "stoplimit": 1.1538,
+        },
+    )
+
+    assert response.status_code == 200
+    assert calls[0]["type"] == order_route.mt5.ORDER_TYPE_BUY_STOP_LIMIT
+    assert calls[0]["price"] == 1.154
+    assert calls[0]["stoplimit"] == 1.1538

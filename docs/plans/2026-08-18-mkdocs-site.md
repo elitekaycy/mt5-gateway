@@ -63,7 +63,7 @@ exclude_docs: |
 theme:
   name: material
   icon:
-    logo: material/chart-candlestick
+    logo: material/finance
     repo: fontawesome/brands/github
     edit: material/pencil
   favicon: assets/favicon-placeholder.svg

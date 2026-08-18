@@ -81,6 +81,11 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Get started:
+      - get-started/index.md
+      - Quickstart: get-started/quickstart.md
+      - Install MT5 + mt5-gateway on a terminal: get-started/install-mt5-terminal.md
+      - Production deploy: get-started/production-deploy.md
 
 extra:
   social:

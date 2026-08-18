@@ -1,0 +1,89 @@
+site_name: mt5-gateway
+site_description: A headless REST API for MetaTrader 5, running under Wine on Linux in Docker.
+site_url: https://elitekaycy.github.io/mt5-gateway/
+repo_url: https://github.com/elitekaycy/mt5-gateway
+repo_name: elitekaycy/mt5-gateway
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; 2026 elitekaycy
+
+docs_dir: docs
+site_dir: site
+
+exclude_docs: |
+  specs/
+  plans/
+
+theme:
+  name: material
+  icon:
+    logo: material/finance
+    repo: fontawesome/brands/github
+    edit: material/pencil
+  favicon: assets/favicon-placeholder.svg
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.tracking
+    - toc.follow
+    - search.highlight
+    - search.share
+    - search.suggest
+    - content.code.copy
+    - content.action.edit
+
+extra_css:
+  - assets/extra.css
+
+plugins:
+  - search
+  - mermaid2:
+      version: 10.9.0
+      arguments:
+        theme: 'dark'
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:mermaid2.fence_mermaid_custom
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.details
+
+nav:
+  - Home: index.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/elitekaycy/mt5-gateway
+  generator: false

@@ -54,3 +54,7 @@ Thumbs.db
 
 # Local deployment helpers may embed endpoint credentials.
 scripts/deploy-cutedge-endpoints.sh
+
+# mkdocs
+.venv-docs/
+site/

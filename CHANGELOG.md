@@ -4,6 +4,22 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-08-18
+
+### Added
+
+- mkdocs-material documentation site (`docs.yml`), deployed to GitHub Pages
+  on push to `main`. Covers get-started, concepts, connecting mt5-gateway to
+  qkt, a full core/optional configuration reference, and operations.
+- `check.yml`'s `test`/`docker-build` jobs now skip (report success) on PRs
+  that touch only docs/markdown, via a `dorny/paths-filter` gate.
+
+### Fixed
+
+- README: corrected two stale published-image version pins, and the
+  Configuration table's missing optional env vars (now covered in full on
+  the docs site).
+
 ## [0.3.10] - 2026-08-12
 
 ### Changed

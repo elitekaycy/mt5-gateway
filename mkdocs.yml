@@ -98,6 +98,10 @@ nav:
       - Configuration: reference/configuration.md
       - API: reference/api.md
       - Ports & security: reference/ports-and-security.md
+  - Operations:
+      - operations/index.md
+      - Health, kill switch, reconcile, metrics: operations/health-and-safety.md
+      - Image size & profiles: operations/image-size.md
 
 extra:
   social:

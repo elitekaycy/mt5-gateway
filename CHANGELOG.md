@@ -4,6 +4,20 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-08-18
+
+### Added
+
+- README: VHS-recorded terminal demo GIF (Docker Hub quickstart, headless
+  login, health checks) with CTA badges, matching qkt's README layout.
+  `docs/assets/mt5-gateway-demo.tape` is committed so it's regenerable.
+
+### Changed
+
+- Docs site: switched to a single dark (slate) palette, and rebuilt the
+  homepage as a real landing page (hero, ticker strip, embedded terminal
+  demo, 3-step walkthrough, feature grid) instead of a plain doc page.
+
 ## [0.3.11] - 2026-08-18
 
 ### Added

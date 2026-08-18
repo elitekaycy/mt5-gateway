@@ -5,6 +5,12 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/elitekaycy/mt5-gateway-api)](https://hub.docker.com/r/elitekaycy/mt5-gateway-api)
 [![Docs](https://img.shields.io/badge/docs-elitekaycy.github.io%2Fmt5--gateway-2f9e6e)](https://elitekaycy.github.io/mt5-gateway/)
 
+<p align="center">
+  <a href="https://elitekaycy.github.io/mt5-gateway/"><img src="https://img.shields.io/badge/Visit%20Docs-14161B?style=for-the-badge&logo=readthedocs&logoColor=2f9e6e" alt="Visit Docs"></a>
+  <a href="#quick-start-with-docker-hub"><img src="https://img.shields.io/badge/Quickstart-14161B?style=for-the-badge&logo=gnubash&logoColor=2f9e6e" alt="Quickstart"></a>
+  <a href="#configuration"><img src="https://img.shields.io/badge/Configuration-14161B?style=for-the-badge&logo=docker&logoColor=2f9e6e" alt="Configuration"></a>
+</p>
+
 ```text
 EURUSD   1.08501 ▲   XAUUSD   2412.30 ▼   GBPUSD   1.27180 ▲   USDJPY  148.220 ▼
 ```
@@ -21,11 +27,13 @@ it logs itself in on boot.
 
 Based on [slowfound's metatrader5-quant-server-python](https://github.com/slowfound/metatrader5-quant-server-python/tree/chapter-1) and his [YouTube tutorial series](https://youtube.com/playlist?list=PLotEOI0Sz3OzdSp7qR6vHs8EYnmQwqWAF).
 
-```bash
-curl -H "Authorization: Bearer $API_KEY" http://localhost:5001/account
-# {"ok": true, "login": 12345678, "server": "Exness-MT5Trial9",
-#  "balance": 10000.0, "trade_allowed": true, "trade_expert": true, ...}
-```
+<p align="center">
+  <img src="docs/assets/mt5-gateway-demo.gif" alt="Pull the image, run it headless against a broker account, and confirm it's alive, logged in, and trading-ready — all from the terminal" width="880">
+</p>
+
+<sub>Commands shown are copy-pasteable from this README; broker credentials are
+dummy values. See <a href="docs/assets/mt5-gateway-demo.tape">the VHS tape</a>
+for how this recording is built.</sub>
 
 Full documentation, with a step-by-step terminal install walkthrough and every
 config var explained, lives at **[elitekaycy.github.io/mt5-gateway](https://elitekaycy.github.io/mt5-gateway/)**.

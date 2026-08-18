@@ -86,6 +86,11 @@ nav:
       - Quickstart: get-started/quickstart.md
       - Install MT5 + mt5-gateway on a terminal: get-started/install-mt5-terminal.md
       - Production deploy: get-started/production-deploy.md
+  - Concepts:
+      - concepts/index.md
+      - Why this exists: concepts/why-headless-login.md
+      - How headless login works: headless-login.md
+      - Architecture: concepts/architecture.md
 
 extra:
   social:

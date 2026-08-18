@@ -2,13 +2,212 @@
   --md-primary-fg-color: #0b3d2e;
   --md-primary-fg-color--dark: #082e22;
   --md-accent-fg-color: #2f9e6e;
+  --mtg-bg: #0a0e0c;
+  --mtg-bg-elev: #101512;
+  --mtg-line: #1c2420;
+  --mtg-fg: #e6ece8;
+  --mtg-fg-mute: #93a39a;
+  --mtg-accent: #2f9e6e;
+  --mtg-accent-soft: rgba(47, 158, 110, 0.14);
+  --mtg-up: #2f9e6e;
+  --mtg-down: #d4635a;
 }
 
 [data-md-color-scheme="slate"] {
-  --md-default-bg-color: #0a0e0c;
-  --md-code-bg-color: #101512;
+  --md-default-bg-color: var(--mtg-bg);
+  --md-code-bg-color: var(--mtg-bg-elev);
 }
 
 .md-typeset code {
   font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+/* ---- landing page (docs/index.md) --------------------------------- */
+
+.mtg-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem 0 1rem;
+  border-bottom: 1px solid var(--mtg-line);
+  margin-bottom: 2rem;
+}
+
+.mtg-hero__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pill {
+  display: inline-block;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--mtg-line);
+  color: var(--mtg-fg-mute);
+  background: var(--mtg-bg-elev);
+}
+
+.pill--accent {
+  border-color: var(--mtg-accent);
+  color: var(--mtg-accent);
+  background: var(--mtg-accent-soft);
+}
+
+.mtg-hero__lede {
+  font-size: 2.1rem;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.mtg-hero__lede em {
+  color: var(--mtg-accent);
+  font-style: normal;
+}
+
+.mtg-hero__sub {
+  max-width: 42rem;
+  color: var(--mtg-fg-mute);
+  font-size: 1.05rem;
+}
+
+.mtg-hero__ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.mtg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--mtg-line);
+  color: var(--mtg-fg) !important;
+  background: var(--mtg-bg-elev);
+  font-weight: 600;
+  text-decoration: none !important;
+}
+
+.mtg-btn:hover {
+  border-color: var(--mtg-accent);
+}
+
+.mtg-btn--primary {
+  background: var(--mtg-accent);
+  border-color: var(--mtg-accent);
+  color: #04140d !important;
+}
+
+.mtg-btn--primary:hover {
+  filter: brightness(1.08);
+}
+
+/* ticker strip */
+
+.mtg-ticker {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+  color: var(--mtg-fg-mute);
+  overflow: hidden;
+  white-space: nowrap;
+  border-top: 1px dashed var(--mtg-line);
+  border-bottom: 1px dashed var(--mtg-line);
+  padding: 0.6rem 0;
+}
+
+.mtg-ticker .up {
+  color: var(--mtg-up);
+}
+
+.mtg-ticker .down {
+  color: var(--mtg-down);
+}
+
+.mtg-ticker .sep {
+  color: var(--mtg-line);
+  margin: 0 0.6rem;
+}
+
+/* demo frame */
+
+.mtg-demo {
+  margin: 1.5rem 0 2.5rem;
+  border: 1px solid var(--mtg-line);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--mtg-bg-elev);
+}
+
+.mtg-demo img {
+  display: block;
+  width: 100%;
+}
+
+.mtg-demo__caption {
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: var(--mtg-fg-mute);
+  border-top: 1px solid var(--mtg-line);
+}
+
+.mtg-demo__caption a {
+  color: var(--mtg-accent);
+}
+
+/* section headers */
+
+.mtg-section__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin: 2.5rem 0 1.25rem;
+}
+
+.mtg-section__num {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.75rem;
+  color: var(--mtg-accent);
+}
+
+.mtg-section__head h2 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+/* 3-step strip */
+
+.mtg-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.25rem;
+}
+
+.mtg-step {
+  padding: 1.25rem;
+  border: 1px solid var(--mtg-line);
+  border-radius: 0.4rem;
+  background: var(--mtg-bg-elev);
+}
+
+.mtg-step__num {
+  font-family: "JetBrains Mono", monospace;
+  color: var(--mtg-accent);
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+
+.mtg-step h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.mtg-step p {
+  margin: 0;
+  color: var(--mtg-fg-mute);
+  font-size: 0.9rem;
 }

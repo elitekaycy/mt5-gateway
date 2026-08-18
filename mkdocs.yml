@@ -96,6 +96,8 @@ nav:
   - Reference:
       - reference/index.md
       - Configuration: reference/configuration.md
+      - API: reference/api.md
+      - Ports & security: reference/ports-and-security.md
 
 extra:
   social:

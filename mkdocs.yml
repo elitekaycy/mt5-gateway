@@ -102,6 +102,7 @@ nav:
       - operations/index.md
       - Health, kill switch, reconcile, metrics: operations/health-and-safety.md
       - Image size & profiles: operations/image-size.md
+  - Contributing: contributing.md
 
 extra:
   social:

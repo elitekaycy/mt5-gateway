@@ -91,6 +91,8 @@ nav:
       - Why this exists: concepts/why-headless-login.md
       - How headless login works: headless-login.md
       - Architecture: concepts/architecture.md
+  - Connect:
+      - Using with qkt: connect/qkt.md
 
 extra:
   social:

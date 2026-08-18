@@ -3,6 +3,13 @@ name: check
 # Fast feedback on every PR and on pushes to the dev integration branch:
 # run the unit tests. The app's MetaTrader5 dependency is Windows-only, so the
 # suite stubs it (tests/conftest.py) and covers the mt5-free logic.
+#
+# `test` and `docker-build` are required status checks on dev's branch
+# protection, so both jobs must still run (even as a no-op) rather than being
+# skipped by the workflow's own `on.paths` — a required check that never runs
+# blocks the merge. Instead, the `changes` job decides whether any changed
+# file is outside docs/markdown, and `test`/`docker-build` report "skipped"
+# (which satisfies a required check) when a PR touches only docs.
 
 on:
   pull_request:
@@ -10,7 +17,26 @@ on:
     branches: [dev]
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      non_docs: ${{ steps.filter.outputs.non_docs }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3
+        id: filter
+        with:
+          filters: |
+            non_docs:
+              - '!docs/**'
+              - '!mkdocs.yml'
+              - '!requirements-docs.txt'
+              - '!.github/workflows/docs.yml'
+              - '!**/*.md'
+
   test:
+    needs: changes
+    if: needs.changes.outputs.non_docs == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
@@ -27,6 +53,8 @@ jobs:
         run: shellcheck scripts/*.sh
 
   docker-build:
+    needs: changes
+    if: needs.changes.outputs.non_docs == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5

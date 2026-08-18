@@ -162,6 +162,8 @@ def send_market_order_endpoint():
             "SELL_LIMIT": mt5.ORDER_TYPE_SELL_LIMIT,
             "BUY_STOP": mt5.ORDER_TYPE_BUY_STOP,
             "SELL_STOP": mt5.ORDER_TYPE_SELL_STOP,
+            "BUY_STOP_LIMIT": mt5.ORDER_TYPE_BUY_STOP_LIMIT,
+            "SELL_STOP_LIMIT": mt5.ORDER_TYPE_SELL_STOP_LIMIT,
         }
 
         order_type_str = (
@@ -171,6 +173,7 @@ def send_market_order_endpoint():
             return validation_error_response(f"Invalid order type: {data['type']}")
 
         order_type = ORDER_TYPE_MAP[order_type_str]
+        stoplimit = None
 
         symbol_info = mt5.symbol_info(data["symbol"])
         if symbol_info is None:
@@ -212,6 +215,8 @@ def send_market_order_endpoint():
             mt5.ORDER_TYPE_SELL_LIMIT,
             mt5.ORDER_TYPE_BUY_STOP,
             mt5.ORDER_TYPE_SELL_STOP,
+            mt5.ORDER_TYPE_BUY_STOP_LIMIT,
+            mt5.ORDER_TYPE_SELL_STOP_LIMIT,
         ]:
             action = TRADE_ACTION_PENDING
 
@@ -222,6 +227,21 @@ def send_market_order_endpoint():
                 price = normalize_price(data["price"], symbol_info)
             except NumericValidationError as error:
                 return validation_error_response(str(error))
+
+            if order_type in (
+                mt5.ORDER_TYPE_BUY_STOP_LIMIT,
+                mt5.ORDER_TYPE_SELL_STOP_LIMIT,
+            ):
+                if "stoplimit" not in data:
+                    return validation_error_response(
+                        "stoplimit required for stop-limit orders"
+                    )
+                try:
+                    stoplimit = normalize_price(data["stoplimit"], symbol_info)
+                except NumericValidationError as error:
+                    return validation_error_response(str(error))
+            else:
+                stoplimit = None
 
             is_valid, error_msg = validate_pending_price(
                 order_type, data["symbol"], price
@@ -287,6 +307,7 @@ def send_market_order_endpoint():
             type_filling=type_filling,
             sl=sl,
             tp=tp,
+            stoplimit=stoplimit,
         )
 
         try:

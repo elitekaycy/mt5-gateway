@@ -93,6 +93,9 @@ nav:
       - Architecture: concepts/architecture.md
   - Connect:
       - Using with qkt: connect/qkt.md
+  - Reference:
+      - reference/index.md
+      - Configuration: reference/configuration.md
 
 extra:
   social:

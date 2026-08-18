@@ -3,6 +3,11 @@
 [![CI](https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml/badge.svg)](https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/elitekaycy/mt5-gateway-api)](https://hub.docker.com/r/elitekaycy/mt5-gateway-api)
+[![Docs](https://img.shields.io/badge/docs-elitekaycy.github.io%2Fmt5--gateway-2f9e6e)](https://elitekaycy.github.io/mt5-gateway/)
+
+```text
+EURUSD   1.08501 ▲   XAUUSD   2412.30 ▼   GBPUSD   1.27180 ▲   USDJPY  148.220 ▼
+```
 
 A REST API for **MetaTrader 5**, running headless under Wine on Linux in Docker.
 
@@ -21,6 +26,9 @@ curl -H "Authorization: Bearer $API_KEY" http://localhost:5001/account
 # {"ok": true, "login": 12345678, "server": "Exness-MT5Trial9",
 #  "balance": 10000.0, "trade_allowed": true, "trade_expert": true, ...}
 ```
+
+Full documentation, with a step-by-step terminal install walkthrough and every
+config var explained, lives at **[elitekaycy.github.io/mt5-gateway](https://elitekaycy.github.io/mt5-gateway/)**.
 
 ## Why this exists
 
@@ -43,7 +51,7 @@ Pull the published image:
 ```bash
 docker pull elitekaycy/mt5-gateway-api:latest
 # or pin a release:
-docker pull elitekaycy/mt5-gateway-api:0.3.2
+docker pull elitekaycy/mt5-gateway-api:0.3.10
 ```
 
 Run headless against a broker account:
@@ -135,7 +143,8 @@ resolver:
 docker compose --profile self-hosted-resolver up
 ```
 
-Full details and every knob: **[docs/headless-login.md](docs/headless-login.md)**.
+Full details and every knob: **[docs/headless-login.md](docs/headless-login.md)**
+(also on the [docs site](https://elitekaycy.github.io/mt5-gateway/headless-login/)).
 
 ## Production Compose example
 
@@ -145,7 +154,7 @@ network or authenticated reverse proxy:
 ```yaml
 services:
   mt5:
-    image: elitekaycy/mt5-gateway-api:0.3.9
+    image: elitekaycy/mt5-gateway-api:0.3.10
     restart: unless-stopped
     env_file: .env
     environment:
@@ -195,16 +204,13 @@ to MT5 access-point addresses during first boot.
 | Var | Meaning |
 |---|---|
 | `MT5_LOGIN` / `MT5_PASSWORD` / `MT5_SERVER` | Broker account number, trading password, server name. Set these for headless login; leave empty for the manual VNC flow. |
+| `API_KEY` | Bearer token required by API operations except `/health/live`; Swagger UI/spec assets remain readable so the UI can load. |
 | `MT5_ENABLE_ALGO_TRADING` | `1` by default. Set `0`, `false`, `no`, `off`, or `disabled` to launch headless with MT5 Expert/live trading disabled. |
-| `MT5_SERVER_ADDR` | Explicit `host:port` to skip name resolution. |
-| `MT5_AUTORESOLVE` | `0` to disable resolution (name-only login against a baked directory). |
-| `MT5_RESOLVER_URL` | Comma-separated resolver URLs, tried in order. |
-| `MT5_SETUP_URL` / `MT5_SETUP_SHA256` | Broker-branded installer URL and its required checksum. |
-| `API_KEY` | Optional bearer token required by API operations except `/health/live`; Swagger UI/spec assets remain readable so the UI can load. |
-| `CUSTOM_USER` / `PASSWORD` | VNC desktop credentials. |
-| `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` / `ERROR`. |
-| `MT5_SERVER_UTC_OFFSET_SECONDS` | Broker server-clock offset from UTC, in seconds (e.g. `10800` for a UTC+3/EEST server). Used to place GTD ("good-till-date") order expiries at the right instant. Leave unset to auto-derive it from a live quote at connect; set it to pin a fixed value, which always overrides auto-derivation. |
-| `MT5_TIME_REFERENCE_SYMBOL` | Symbol whose live quote auto-derives the server UTC offset at connect (default `EURUSD`). Set it to any symbol your broker quotes if `EURUSD` is unavailable. |
+
+These three plus `API_KEY` are all headless login needs. Every other knob —
+resolver tuning, pre-trade limits, GTD/timezone handling, audit and
+kill-switch paths, CORS, VNC — is documented in full, core vs optional, in
+the **[Configuration reference](https://elitekaycy.github.io/mt5-gateway/reference/configuration/)**.
 
 ## Ports
 
@@ -216,7 +222,8 @@ to MT5 access-point addresses during first boot.
 The published image is intentionally self-contained: MT5 runs under Wine, and
 the Wine prefix includes Windows Python, the MetaTrader5 Python package, and the
 MT5 terminal itself, so a fresh volume boots quickly. On the published `0.3.1`
-image, the audit showed:
+image, an audit showed the following breakdown (the image has moved to
+`0.3.10` since and this hasn't been re-measured — treat it as indicative):
 
 | Area | Approx size | Why it exists |
 |---|---:|---|
@@ -304,7 +311,9 @@ Every JSON response includes `ok`. Collection responses use `data`; successful
 mutations also include a human-readable `message`, broker `result`, and
 operation-specific safety fields. Errors include `ok: false`, `error`, and
 `error_type`, with optional `details`, `request_id`, and `mt5_error`.
-Interactive endpoint schemas are available at `/apidocs`.
+Interactive endpoint schemas are available at `/apidocs`; see the
+[API reference](https://elitekaycy.github.io/mt5-gateway/reference/api/) for
+the conventions above written out in full.
 
 ## Security posture
 
@@ -345,6 +354,15 @@ REST client ──HTTP──▶ Flask (waitress)  ──Python IPC──▶  MT5
 - `app/` — Flask routes, safety controls, MT5 connection, and broker resolver.
 - `scripts/` — boot, Wine/MT5 install, resolver cascade, and headless login.
 - MT5 state persists in the `/config` Docker volume.
+
+## Using this as a broker backend
+
+This gateway is designed to sit behind a trading engine rather than be driven
+by hand. [qkt](https://github.com/elitekaycy/qkt) — an event-driven trading
+engine — talks to it exactly this way: qkt never touches MT5 directly, it
+calls this gateway's REST API. See
+**[Using with qkt](https://elitekaycy.github.io/mt5-gateway/connect/qkt/)**
+for the Compose wiring, healthcheck handshake, and multi-broker pattern.
 
 ## Development
 

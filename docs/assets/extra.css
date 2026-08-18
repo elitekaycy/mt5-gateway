@@ -1,0 +1,14 @@
+:root {
+  --md-primary-fg-color: #0b3d2e;
+  --md-primary-fg-color--dark: #082e22;
+  --md-accent-fg-color: #2f9e6e;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: #0a0e0c;
+  --md-code-bg-color: #101512;
+}
+
+.md-typeset code {
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+}

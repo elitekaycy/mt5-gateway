@@ -50,6 +50,52 @@ idempotency_store = IdempotencyStore(
 )
 
 
+FILL_CONFIRM_TIMEOUT_MS = int(os.getenv("MT5_FILL_CONFIRM_TIMEOUT_MS", "3000"))
+FILL_CONFIRM_POLL_MS = int(os.getenv("MT5_FILL_CONFIRM_POLL_MS", "200"))
+
+
+def _resolve_async_fill(result_dict, result, request_id):
+    """Resolve the true fill price when order_send reports a done deal with price 0.
+
+    Some servers (dealer-desk / async execution, e.g. The5ers' FivePercentOnline)
+    acknowledge a market order with TRADE_RETCODE_DONE while the fill price is
+    still 0.0; the real price materializes in the deal/position moments later.
+    The endpoint's contract is "market orders execute at current price", so wait
+    a bounded moment for the truth instead of relaying a 0.0 every consumer
+    would mis-book. Mutates result_dict in place and returns the price source.
+    """
+    deadline = time.monotonic() + FILL_CONFIRM_TIMEOUT_MS / 1000.0
+    while time.monotonic() < deadline:
+        time.sleep(FILL_CONFIRM_POLL_MS / 1000.0)
+        try:
+            deal_ticket = getattr(result, "deal", 0)
+            if deal_ticket:
+                deals = mt5.history_deals_get(ticket=deal_ticket)
+                if deals:
+                    deal = deals[0]._asdict()
+                    if deal.get("price"):
+                        result_dict["price"] = deal["price"]
+                        if not result_dict.get("volume"):
+                            result_dict["volume"] = deal.get("volume")
+                        return "deal"
+            order_ticket = getattr(result, "order", 0)
+            if order_ticket:
+                positions = mt5.positions_get(ticket=order_ticket)
+                if positions:
+                    position = positions[0]._asdict()
+                    if position.get("price_open"):
+                        result_dict["price"] = position["price_open"]
+                        return "position"
+        except (
+            Exception
+        ) as exc:  # a transient lookup failure must not break the order response
+            logger.debug(f"[{request_id}] fill-price lookup retry after: {exc}")
+    logger.warning(
+        f"[{request_id}] async fill price unresolved after {FILL_CONFIRM_TIMEOUT_MS}ms; relaying raw result"
+    )
+    return "unresolved"
+
+
 @order_bp.route("/order", methods=["POST"])
 @require_mt5_connection
 @swag_from(
@@ -407,6 +453,13 @@ def send_market_order_endpoint():
         )
 
         result_dict = result._asdict()
+        fill_price_source = "order_send"
+        if action == TRADE_ACTION_DEAL and not result_dict.get("price"):
+            fill_price_source = _resolve_async_fill(result_dict, result, request_id)
+            if fill_price_source != "unresolved":
+                logger.info(
+                    f"[{request_id}] async fill price resolved via {fill_price_source}: {result_dict.get('price')}"
+                )
         payload = {
             "message": f"Order {action_str} successfully",
             "state": state,
@@ -414,6 +467,7 @@ def send_market_order_endpoint():
             "sl_confirmed": result_dict.get("sl"),
             "tp_confirmed": result_dict.get("tp"),
             "partial_fill": partial_fill,
+            "fill_price_source": fill_price_source,
         }
         if idempotency_key:
             payload["client_order_id"] = idempotency_key

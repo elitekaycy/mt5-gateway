@@ -75,7 +75,9 @@ def client(monkeypatch):
 
 
 def _send(client):
-    return client.post("/order", json={"symbol": "EURUSD", "volume": 0.1, "type": "BUY"})
+    return client.post(
+        "/order", json={"symbol": "EURUSD", "volume": 0.1, "type": "BUY"}
+    )
 
 
 def test_sync_fill_price_passes_through_untouched(client, monkeypatch):
@@ -108,7 +110,9 @@ def test_zero_price_resolves_from_the_deal(client, monkeypatch):
     monkeypatch.setattr(
         order_route.mt5,
         "history_deals_get",
-        lambda **kw: [_Record(price=1.1052, volume=0.1)] if kw.get("ticket") == 11 else [],
+        lambda **kw: (
+            [_Record(price=1.1052, volume=0.1)] if kw.get("ticket") == 11 else []
+        ),
         raising=False,
     )
     body = _send(client).get_json()

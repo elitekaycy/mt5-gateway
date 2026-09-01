@@ -86,7 +86,9 @@ def _resolve_async_fill(result_dict, result, request_id):
                     if position.get("price_open"):
                         result_dict["price"] = position["price_open"]
                         return "position"
-        except Exception as exc:  # a transient lookup failure must not break the order response
+        except (
+            Exception
+        ) as exc:  # a transient lookup failure must not break the order response
             logger.debug(f"[{request_id}] fill-price lookup retry after: {exc}")
     logger.warning(
         f"[{request_id}] async fill price unresolved after {FILL_CONFIRM_TIMEOUT_MS}ms; relaying raw result"

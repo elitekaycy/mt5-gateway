@@ -539,6 +539,7 @@ swagger_config = {
                 "status": {"type": "string"},
                 "mt5_status": {"type": "string"},
                 "error": {"type": "string"},
+                "kill_switch_active": {"type": "boolean"},
             },
         },
         "LivenessResponse": {

@@ -83,27 +83,40 @@ def ready_check():
     """
     Readiness Check
     ---
-    description: Kubernetes-style readiness probe. Returns 503 if MT5 is unavailable.
+    description: >
+      Kubernetes-style readiness probe. Returns 503 only if MT5 is unavailable.
+      The kill switch is an operator trading gate, not a service fault: while it
+      is engaged the gateway is fully able to serve reads, flatten, and release,
+      so readiness stays 200 and the state is reported in `kill_switch_active`.
+      (Before 0.3.14 an engaged kill switch returned 503, which made compose
+      `service_healthy` dependants such as the qkt daemon unable to restart
+      during a weekend or news kill.)
     """
     conn = MT5Connection.get_instance()
 
     terminal = mt5.terminal_info() if conn.is_connected() else None
     account = mt5.account_info() if terminal is not None else None
-    ready = terminal is not None and account is not None and not kill_switch.is_active()
+    ready = terminal is not None and account is not None
+    kill_active = kill_switch.is_active()
     metrics.set("mt5_connected", 1 if account is not None else 0)
-    metrics.set("kill_switch_active", 1 if kill_switch.is_active() else 0)
+    metrics.set("kill_switch_active", 1 if kill_active else 0)
 
     if ready:
-        return jsonify({"status": "ready", "mt5_status": conn.get_status().value}), 200
-    else:
         return jsonify(
             {
-                "status": "not_ready",
+                "status": "ready",
                 "mt5_status": conn.get_status().value,
-                "error": conn.get_last_error(),
-                "kill_switch_active": kill_switch.is_active(),
+                "kill_switch_active": kill_active,
             }
-        ), 503
+        ), 200
+    return jsonify(
+        {
+            "status": "not_ready",
+            "mt5_status": conn.get_status().value,
+            "error": conn.get_last_error(),
+            "kill_switch_active": kill_active,
+        }
+    ), 503
 
 
 @health_bp.route("/health/live")

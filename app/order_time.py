@@ -11,16 +11,23 @@ on Linux CI with a stubbed mt5, without pulling in Flask and the rest of the app
 """
 
 from mt5_connection import mt5
-from time_utils import utc_epoch_to_server
+from time_utils import derive_from_tick, utc_epoch_to_server
 
 
-def apply_expiration(request_data, data, existing_order=None):
+def apply_expiration(
+    request_data, data, existing_order=None, symbol=None, symbol_tick_time=None
+):
     """Upgrade an order request to GTD when the caller supplied an expiration.
 
     Reads ``expiration`` (unix epoch seconds) from the incoming request ``data``.
     If present, sets the MT5 request to expire at that time (ORDER_TIME_SPECIFIED);
     if absent, leaves the request untouched so it keeps the time-in-force it already
     has (the GTC default) — existing callers are unaffected.
+
+    ``symbol`` and ``symbol_tick_time`` are the order's own symbol and its latest quote
+    time. That symbol exists on this account by definition, so a fresh quote from it
+    derives the broker offset on the spot — no reference symbol, no configuration —
+    and refreshes the cache for later orders. A stale quote is ignored.
 
     Mutates ``request_data`` in place and returns it.
 
@@ -30,6 +37,8 @@ def apply_expiration(request_data, data, existing_order=None):
     """
     expiration = data.get("expiration")
     if expiration is not None:
+        if symbol is not None:
+            derive_from_tick(symbol, symbol_tick_time)
         request_data["type_time"] = mt5.ORDER_TIME_SPECIFIED
         request_data["expiration"] = utc_epoch_to_server(expiration)
     elif existing_order is not None:

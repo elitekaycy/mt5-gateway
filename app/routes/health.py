@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify
 from kill_switch import kill_switch
 from metrics import metrics
 from mt5_connection import MT5Connection, mt5
+from time_utils import offset_status
 from version import get_version
 
 health_bp = Blueprint("health", __name__)
@@ -59,6 +60,10 @@ def health_check():
         response["last_error"] = last_error
     else:
         response["last_error"] = None
+
+    # The offset GTD expiries are converted with, so a client can check it against
+    # its own view of the broker's clock (#93).
+    response["server_time"] = offset_status()
 
     return jsonify(response), 200
 

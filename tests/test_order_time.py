@@ -87,3 +87,31 @@ def test_modify_can_override_existing_expiration():
     apply_expiration(req, {"expiration": 2_100_000_000}, existing_order=existing)
 
     assert req["expiration"] == 2_100_000_000
+
+
+def test_a_fresh_tick_for_the_orders_own_symbol_derives_the_offset(monkeypatch):
+    # No connect-time derivation (broker has no EURUSD): the order's own symbol quotes,
+    # and that quote is enough to place the GTD correctly.
+    set_derived_offset(None)
+    now = 1_785_000_000
+    monkeypatch.setattr("time_utils.time.time", lambda: now)
+    req = {"type_time": ORDER_TIME_GTC}
+    apply_expiration(
+        req,
+        {"expiration": now + 600},
+        symbol="BTCUSDm",
+        symbol_tick_time=now + 3 * 3600 + 2,
+    )
+    assert req["type_time"] == ORDER_TIME_SPECIFIED
+    assert req["expiration"] == now + 600 + 3 * 3600
+
+
+def test_a_stale_tick_for_the_orders_symbol_falls_back_to_the_cache(monkeypatch):
+    set_derived_offset(10800)
+    now = 1_785_000_000
+    monkeypatch.setattr("time_utils.time.time", lambda: now)
+    req = {"type_time": ORDER_TIME_GTC}
+    apply_expiration(
+        req, {"expiration": now + 600}, symbol="XAUUSDm", symbol_tick_time=now - 9000
+    )
+    assert req["expiration"] == now + 600 + 10800

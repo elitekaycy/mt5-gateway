@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.15] - 2026-09-16
+
 ### Fixed
 
 - GTD expiries on brokers without a plain `EURUSD` symbol (suffixed names such
@@ -25,6 +27,15 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 ### Removed
 
 - Dead `Settings.server_utc_offset_seconds` (defaulted to 0 and was unused).
+
+### Build
+
+- The MT5-installer layer logs each attempt's exit status, tells `timeout`'s 124
+  apart from a crash, and prints free space before the install and again on
+  failure. A failed install previously surfaced only as a bare
+  `test -f terminal64.exe`, which made a starved build disk look like a Wine
+  bug (#96). Note the installer exits non-zero even on a good install, so the
+  terminal check still decides success.
 
 ## [0.3.12] - 2026-08-18
 

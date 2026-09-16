@@ -341,10 +341,12 @@ network and an authenticated reverse proxy or mTLS. See
 - `POST /kill` halts trading; `POST /kill/release` resumes it.
 - `GET /reconcile?magic=...` returns broker positions, orders, and recent deals.
 - GTD ("good-till-date") order expiries are converted from UTC to broker-server
-  time using an offset auto-derived from a live quote at each connect (so it
-  re-derives across DST). Pin it with `MT5_SERVER_UTC_OFFSET_SECONDS` to override.
-  If neither the env nor a fresh quote yields an offset, a GTD order is rejected
-  rather than expiring at the wrong time.
+  time. The offset is derived from the account's own quotes — the freshest symbol
+  in Market Watch at connect, each GTD order's own symbol, and a refresh every ten
+  minutes — so any broker naming works and DST switches are picked up without a
+  restart. Pin it with `MT5_SERVER_TIME_ZONE` (DST-safe) to override. With no
+  usable offset a GTD order is rejected rather than expiring at the wrong time;
+  `GET /health` shows the offset in force under `server_time`.
 
 ## Contributing
 

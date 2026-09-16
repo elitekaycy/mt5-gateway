@@ -33,12 +33,20 @@ by hand over VNC on `:3000`.
 
 | Var | Default | Meaning |
 |---|---|---|
-| `MT5_SERVER_UTC_OFFSET_SECONDS` | auto-derived | Broker server-clock offset from UTC, in seconds (e.g. `10800` for UTC+3/EEST). Used to place GTD ("good-till-date") order expiries at the right instant. If unset, it's derived from a live quote at each connect (so it re-derives across DST); if set, it always overrides auto-derivation. |
-| `MT5_TIME_REFERENCE_SYMBOL` | `EURUSD` | Symbol whose live quote auto-derives the server UTC offset at connect. Set it to any symbol your broker quotes if `EURUSD` is unavailable. |
-| `MT5_TIME_DERIVE_ATTEMPTS` | `10` | Polling attempts for a fresh-enough quote when deriving the offset. |
+| `MT5_SERVER_TIME_ZONE` | unset | IANA zone of the broker's trade server (e.g. `Europe/Athens`, `Etc/UTC`). Converted per instant, so it stays right across DST. When set it always wins. |
+| `MT5_SERVER_UTC_OFFSET_SECONDS` | unset | Fixed broker offset from UTC in seconds (e.g. `10800`). Kept for compatibility; it does not follow DST, prefer `MT5_SERVER_TIME_ZONE`. Wins over derivation. |
+| `MT5_TIME_REFERENCE_SYMBOL` | unset | Symbol to try first when deriving the offset. Unset, the gateway uses the freshest quote among the symbols visible in Market Watch, so any broker naming (`EURUSDm`, `EURUSD.pro`, crypto-only accounts) works with no configuration. |
+| `MT5_TIME_DERIVE_ATTEMPTS` | `10` | Polling attempts for a fresh-enough quote when deriving the offset at connect. |
 | `MT5_TIME_DERIVE_DELAY` | `0.5` | Seconds between those polling attempts. |
+| `MT5_TIME_REFRESH_SECONDS` | `600` | How often the offset is re-derived while connected (DST switches, markets that were closed at boot). `0` disables the refresh. A changed value is logged at WARNING. |
+| `MT5_TIME_MAX_OFFSET_AGE_SECONDS` | `21600` | A derived offset older than this is not used for GTD conversion; the order is refused until a fresh quote refreshes it. |
 
-If neither the env var nor a fresh quote yields an offset, a GTD order is
+Every GTD order also derives the offset from its own symbol's latest quote when that quote
+is fresh, so a broker whose reference symbols never quote still places GTD orders correctly.
+`GET /health` reports the offset in force under `server_time` (`offset_seconds`, `source`,
+`symbol`, `derived_at`, `age_seconds`).
+
+If no explicit setting and no usable derived offset exist, a GTD order is
 rejected rather than expiring at the wrong time.
 
 ## Optional — pre-trade limits

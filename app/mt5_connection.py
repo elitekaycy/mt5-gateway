@@ -3,15 +3,15 @@ import os
 import time
 from enum import Enum
 from functools import wraps
-from threading import Lock, RLock, local
+from threading import Event, Lock, RLock, Thread, local
 from typing import Any, Callable, Optional
 
 import MetaTrader5 as _mt5
 
 from time_utils import (
-    derive_offset_from_server_epoch,
+    derive_from_tick,
+    freshest_tick,
     resolve_offset_seconds,
-    set_derived_offset,
 )
 
 logger = logging.getLogger(__name__)
@@ -130,6 +130,8 @@ class MT5Connection:
         self._last_verified_at = 0.0
         self._verify_lock = Lock()
         self._reconnect_lock = Lock()
+        self._offset_refresher: Optional[Thread] = None
+        self._offset_refresh_stop = Event()
 
     @classmethod
     def get_instance(cls) -> "MT5Connection":
@@ -192,6 +194,7 @@ class MT5Connection:
                         )
                         self._set_status(ConnectionStatus.CONNECTED)
                         self._refresh_server_offset()
+                        self.start_offset_refresher()
                         return True
 
                 error_code, error_str = mt5.last_error()
@@ -233,38 +236,88 @@ class MT5Connection:
         fails loud rather than guessing UTC. Never propagates -- a derivation
         failure must not fail an otherwise-healthy connection.
         """
-        symbol = os.getenv("MT5_TIME_REFERENCE_SYMBOL", "EURUSD")
         attempts = int(os.getenv("MT5_TIME_DERIVE_ATTEMPTS", "10"))
         delay = float(os.getenv("MT5_TIME_DERIVE_DELAY", "0.5"))
         try:
-            mt5.symbol_select(symbol, True)
+            candidates = self._offset_reference_symbols()
             derived = None
+            used: Optional[str] = None
             for attempt in range(attempts):
-                tick = mt5.symbol_info_tick(symbol)
-                if tick is not None and getattr(tick, "time", 0):
-                    derived = derive_offset_from_server_epoch(tick.time, time.time())
+                ticks = []
+                for symbol in candidates:
+                    tick = mt5.symbol_info_tick(symbol)
+                    ticks.append(
+                        (symbol, getattr(tick, "time", None) if tick else None)
+                    )
+                best = freshest_tick(ticks)
+                if best is not None:
+                    derived = derive_from_tick(best[0], best[1])
                     if derived is not None:
+                        used = best[0]
                         break
                 if attempt < attempts - 1:
                     time.sleep(delay)
-            if derived is not None:
-                set_derived_offset(derived)
-            else:
+            if derived is None:
                 logger.warning(
-                    "Broker UTC offset not derived: no fresh quote for %s after %d attempts",
-                    symbol,
+                    "Broker UTC offset not derived: no fresh quote on %s after %d attempts",
+                    ", ".join(candidates[:8]) or "(no symbols)",
                     attempts,
                 )
             logger.info(
-                "Broker UTC offset resolved",
+                "Broker UTC offset %s",
+                "resolved" if resolve_offset_seconds() is not None else "not resolved",
                 extra={
                     "offset_seconds": resolve_offset_seconds(),
-                    "reference_symbol": symbol,
+                    "reference_symbol": used,
                     "derived": derived,
                 },
             )
         except Exception as error:
             logger.warning("Broker UTC offset derivation skipped: %s", error)
+
+    def _offset_reference_symbols(self) -> list:
+        """Symbols whose quotes may derive the server offset, best first.
+
+        An explicit ``MT5_TIME_REFERENCE_SYMBOL`` is tried first. Otherwise every symbol
+        visible in Market Watch is a candidate — the account's own naming, whatever the
+        broker's suffix or prefix scheme, and 24/7 crypto keeps it working at weekends.
+        ``EURUSD`` is only the fallback when Market Watch cannot be listed.
+        """
+        explicit = os.getenv("MT5_TIME_REFERENCE_SYMBOL", "").strip()
+        candidates: list = []
+        if explicit:
+            mt5.symbol_select(explicit, True)
+            candidates.append(explicit)
+        listing = getattr(mt5, "symbols_get", None)
+        watched = listing() if listing is not None else None
+        if watched:
+            for info in watched:
+                name = getattr(info, "name", None)
+                if name and getattr(info, "visible", True) and name not in candidates:
+                    candidates.append(name)
+        if not candidates:
+            mt5.symbol_select("EURUSD", True)
+            candidates.append("EURUSD")
+        return candidates
+
+    def start_offset_refresher(self) -> None:
+        """Re-derive the server offset periodically so a DST switch or a market that was
+        closed at boot cannot leave a stale or missing offset for the life of the
+        connection. ``MT5_TIME_REFRESH_SECONDS`` sets the period; 0 disables it.
+        """
+        period = float(os.getenv("MT5_TIME_REFRESH_SECONDS", "600"))
+        if period <= 0 or self._offset_refresher is not None:
+            return
+
+        def loop() -> None:
+            while not self._offset_refresh_stop.wait(period):
+                if self.is_connected():
+                    self._refresh_server_offset()
+
+        self._offset_refresher = Thread(
+            target=loop, name="mt5-offset-refresh", daemon=True
+        )
+        self._offset_refresher.start()
 
     def note_connection_failure(self, error: Any) -> None:
         """Mark the connection disconnected after an IPC-level MT5 call failure.
@@ -346,6 +399,7 @@ class MT5Connection:
             self._reconnect_lock.release()
 
     def shutdown(self):
+        self._offset_refresh_stop.set()
         if self._status != ConnectionStatus.DISCONNECTED:
             try:
                 mt5.shutdown()

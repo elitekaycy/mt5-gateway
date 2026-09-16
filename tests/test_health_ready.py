@@ -81,3 +81,20 @@ def test_not_ready_when_mt5_is_disconnected(make_client):
     assert body["mt5_status"] == "disconnected"
     assert body["error"] == "terminal down"
     assert body["kill_switch_active"] is False
+
+
+def test_health_reports_the_server_time_offset(make_client, monkeypatch):
+    from time_utils import derive_from_tick, set_derived_offset
+
+    set_derived_offset(None)
+    now = 1_785_000_000
+    derive_from_tick("BTCUSDm", now + 1, utc_now=now)
+    monkeypatch.setattr("time_utils.time.time", lambda: now + 30)
+
+    body = make_client(connected=True).get("/health").get_json()
+
+    assert body["server_time"]["offset_seconds"] == 0
+    assert body["server_time"]["source"] == "derived"
+    assert body["server_time"]["symbol"] == "BTCUSDm"
+    assert body["server_time"]["age_seconds"] == 30
+    set_derived_offset(None)

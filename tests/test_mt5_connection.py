@@ -282,3 +282,69 @@ def test_is_ipc_failure_classification():
     assert not mt5_connection.is_ipc_failure((1, "Success"))
     assert not mt5_connection.is_ipc_failure(None)
     assert not mt5_connection.is_ipc_failure("not a tuple")
+
+
+def _fake_mt5_with_market_watch(symbols, ticks_by_symbol):
+    """Fake MT5 whose Market Watch holds [symbols]; ticks come from [ticks_by_symbol]."""
+
+    class Fake:
+        def symbols_get(self, group=None):
+            return [
+                SimpleNamespace(name=name, visible=visible) for name, visible in symbols
+            ]
+
+        def symbol_select(self, symbol, enable=True):
+            return any(name == symbol for name, _ in symbols)
+
+        def symbol_info_tick(self, symbol):
+            t = ticks_by_symbol.get(symbol)
+            return None if t is None else SimpleNamespace(time=t)
+
+    return Fake()
+
+
+def test_refresh_server_offset_picks_a_quoting_symbol_when_eurusd_is_absent(
+    monkeypatch,
+):
+    # Exness-style account: every symbol carries a suffix and EURUSD does not exist.
+    # Derivation must use the freshest visible quote instead of a hard-coded name (#93).
+    monkeypatch.delenv("MT5_SERVER_UTC_OFFSET_SECONDS", raising=False)
+    monkeypatch.delenv("MT5_TIME_REFERENCE_SYMBOL", raising=False)
+    monkeypatch.setenv("MT5_TIME_DERIVE_ATTEMPTS", "2")
+    monkeypatch.setenv("MT5_TIME_DERIVE_DELAY", "0")
+    set_derived_offset(None)
+
+    now = int(time.time())
+    fake = _fake_mt5_with_market_watch(
+        [("EURUSDm", True), ("BTCUSDm", True), ("XAUUSDm", False)],
+        {"EURUSDm": now - 40 * 3600, "BTCUSDm": now + 2},  # FX stale, crypto live
+    )
+    monkeypatch.setattr(mt5_connection, "mt5", fake)
+
+    mt5_connection.MT5Connection()._refresh_server_offset()
+
+    from time_utils import offset_status
+
+    assert resolve_offset_seconds() == 0
+    assert offset_status()["symbol"] == "BTCUSDm"
+    set_derived_offset(None)
+
+
+def test_explicit_reference_symbol_is_tried_first(monkeypatch):
+    monkeypatch.delenv("MT5_SERVER_UTC_OFFSET_SECONDS", raising=False)
+    monkeypatch.setenv("MT5_TIME_REFERENCE_SYMBOL", "XAUUSDm")
+    monkeypatch.setenv("MT5_TIME_DERIVE_ATTEMPTS", "1")
+    monkeypatch.setenv("MT5_TIME_DERIVE_DELAY", "0")
+    set_derived_offset(None)
+
+    now = int(time.time())
+    fake = _fake_mt5_with_market_watch(
+        [("BTCUSDm", True), ("XAUUSDm", True)],
+        {"BTCUSDm": now + 1, "XAUUSDm": now + 3 * 3600 + 1},
+    )
+    monkeypatch.setattr(mt5_connection, "mt5", fake)
+
+    mt5_connection.MT5Connection()._refresh_server_offset()
+
+    assert resolve_offset_seconds() == 3 * 3600
+    set_derived_offset(None)

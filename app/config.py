@@ -14,7 +14,6 @@ class Settings:
     cors_origins: tuple[str, ...]
     max_num_bars: int
     max_history_range_days: int
-    server_utc_offset_seconds: int
 
     @classmethod
     def from_env(cls):
@@ -31,9 +30,6 @@ class Settings:
             ),
             max_num_bars=int(os.getenv("MAX_NUM_BARS", "10000")),
             max_history_range_days=int(os.getenv("MAX_HISTORY_RANGE_DAYS", "31")),
-            server_utc_offset_seconds=int(
-                os.getenv("MT5_SERVER_UTC_OFFSET_SECONDS", "0")
-            ),
         )
         settings.validate()
         return settings

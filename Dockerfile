@@ -143,13 +143,26 @@ RUN set -eux; \
   printf '%s  %s\n' "$MT5_SETUP_SHA256" /tmp/mt5setup.exe | sha256sum -c -; \
   wine reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f; \
   terminal="$WINE_TEMPLATE/drive_c/Program Files/MetaTrader 5/terminal64.exe"; \
-  attempt=0; \
+  attempt=0; status=0; \
+  echo "mt5 install: build space before install: $(df -Pk "$WINE_TEMPLATE" | awk 'NR==2 {print $4 " KiB free on " $6}')"; \
   while [ ! -f "$terminal" ] && [ "$attempt" -lt 3 ]; do \
     attempt=$((attempt + 1)); \
-    timeout 600 wine /tmp/mt5setup.exe /auto || true; \
+    status=0; timeout 600 wine /tmp/mt5setup.exe /auto || status=$?; \
+    case "$status" in \
+      0) note="clean exit" ;; \
+      124) note="killed by the 600s timeout" ;; \
+      *) note="non-zero exit; the MT5 installer does this even on a good install, so the terminal check below decides" ;; \
+    esac; \
+    echo "mt5 install: attempt $attempt: exit=$status ($note)"; \
     [ -f "$terminal" ] || wineserver -k || true; \
   done; \
-  test -f "$terminal"; \
+  if [ ! -f "$terminal" ]; then \
+    echo "mt5 install: FAILED after $attempt attempt(s), last exit=$status; no terminal64.exe" >&2; \
+    echo "mt5 install: space now: $(df -Pk "$WINE_TEMPLATE" | awk 'NR==2 {print $4 " KiB free on " $6}')" >&2; \
+    echo "mt5 install: a starved build filesystem is the usual cause; several GiB are needed here" >&2; \
+    exit 1; \
+  fi; \
+  echo "mt5 install: terminal64.exe present after $attempt attempt(s), last exit=$status"; \
   printf 'mt5_setup_url=%s\nmt5_setup_sha256=%s\ninstalled_at=%s\nterminal_build=%s\n' \
     "$MT5_SETUP_URL" "$MT5_SETUP_SHA256" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     "$(python3 /scripts/mt5-terminal-build.py "$terminal")" \

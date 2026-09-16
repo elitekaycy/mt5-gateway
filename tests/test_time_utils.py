@@ -90,3 +90,90 @@ def test_derive_rejects_an_implausible_offset():
     utc_now = 1_785_000_000
     # 20h ahead is outside any real broker-server offset even though it rounds clean.
     assert derive_offset_from_server_epoch(utc_now + 20 * _HOUR, utc_now) is None
+
+
+def test_zone_override_follows_dst_for_the_instant_converted(monkeypatch):
+    # Europe/Athens: UTC+2 in January, UTC+3 in July. A zone survives DST; a fixed
+    # seconds value does not.
+    monkeypatch.setenv("MT5_SERVER_TIME_ZONE", "Europe/Athens")
+    january = 1_767_225_600  # 2026-01-01T00:00:00Z
+    july = 1_782_864_000  # 2026-07-01T00:00:00Z
+
+    assert utc_epoch_to_server(january) == january + 2 * _HOUR
+    assert utc_epoch_to_server(july) == july + 3 * _HOUR
+    assert resolve_offset_seconds(at_epoch=july) == 3 * _HOUR
+
+
+def test_zone_override_wins_over_seconds_env_and_derived(monkeypatch):
+    monkeypatch.setenv("MT5_SERVER_TIME_ZONE", "Etc/UTC")
+    monkeypatch.setenv("MT5_SERVER_UTC_OFFSET_SECONDS", "10800")
+    set_derived_offset(7200)
+
+    assert utc_epoch_to_server(1_000_000) == 1_000_000
+
+
+def test_derive_from_tick_caches_and_reports_its_source():
+    from time_utils import derive_from_tick, offset_status
+
+    now = 1_785_000_000
+    assert derive_from_tick("BTCUSDm", now + 3, utc_now=now) == 0
+    status = offset_status(now=now + 12)
+    assert status["offset_seconds"] == 0
+    assert status["source"] == "derived"
+    assert status["symbol"] == "BTCUSDm"
+    assert status["age_seconds"] == 12
+
+
+def test_derive_from_tick_ignores_a_stale_tick_and_keeps_the_cache():
+    from time_utils import derive_from_tick
+
+    now = 1_785_000_000
+    assert derive_from_tick("EURUSDm", now + 3 * _HOUR, utc_now=now) == 3 * _HOUR
+    # 2.5h off: stale, rejected, cache untouched.
+    assert derive_from_tick("EURUSDm", now + 9000, utc_now=now) is None
+    assert resolve_offset_seconds() == 3 * _HOUR
+
+
+def test_a_changed_derived_offset_is_logged_as_a_warning(caplog):
+    from time_utils import derive_from_tick
+
+    now = 1_785_000_000
+    derive_from_tick("EURUSDm", now + 3 * _HOUR, utc_now=now)
+    with caplog.at_level("WARNING", logger="time_utils"):
+        derive_from_tick("EURUSDm", now + 2 * _HOUR, utc_now=now)
+    assert any("10800 -> 7200" in record.getMessage() for record in caplog.records)
+    assert resolve_offset_seconds() == 2 * _HOUR
+
+
+def test_a_cached_offset_older_than_the_max_age_is_not_used_for_gtd(monkeypatch):
+    from time_utils import derive_from_tick
+
+    monkeypatch.setenv("MT5_TIME_MAX_OFFSET_AGE_SECONDS", "3600")
+    now = 1_785_000_000
+    derive_from_tick("EURUSDm", now + 3 * _HOUR, utc_now=now)
+
+    assert utc_epoch_to_server(now + 1800, utc_now=now + 1800) == now + 1800 + 3 * _HOUR
+    with pytest.raises(ServerOffsetUnavailable):
+        utc_epoch_to_server(now + 7200, utc_now=now + 7200)
+
+
+def test_freshest_tick_picks_the_most_recent_quote():
+    from time_utils import freshest_tick
+
+    ticks = [("EURUSDm", 100), ("BTCUSDm", 250), ("XAUUSDm", 0), ("GBPUSDm", None)]
+    assert freshest_tick(ticks) == ("BTCUSDm", 250)
+    assert freshest_tick([]) is None
+    assert freshest_tick([("XAUUSDm", 0)]) is None
+
+
+def test_status_reports_unresolved_when_nothing_is_known():
+    from time_utils import offset_status
+
+    status = offset_status(now=1_785_000_000)
+    assert status == {
+        "offset_seconds": None,
+        "source": None,
+        "symbol": None,
+        "derived_at": None,
+        "age_seconds": None,
+    }

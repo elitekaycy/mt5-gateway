@@ -45,6 +45,14 @@ from time_utils import ServerOffsetUnavailable
 
 order_bp = Blueprint("order", __name__)
 logger = logging.getLogger(__name__)
+
+
+def _tick_time(symbol):
+    """Latest quote time for ``symbol``, or None when it has no quote right now."""
+    tick = mt5.symbol_info_tick(symbol)
+    return getattr(tick, "time", None) if tick is not None else None
+
+
 idempotency_store = IdempotencyStore(
     ttl_seconds=float(os.getenv("MT5_IDEMPOTENCY_TTL", "3600"))
 )
@@ -357,7 +365,12 @@ def send_market_order_endpoint():
         )
 
         try:
-            apply_expiration(request_data, data)
+            apply_expiration(
+                request_data,
+                data,
+                symbol=data["symbol"],
+                symbol_tick_time=_tick_time(data["symbol"]),
+            )
         except ServerOffsetUnavailable as error:
             return validation_error_response(str(error))
 
@@ -640,7 +653,12 @@ def order_check_endpoint():
         )
 
         try:
-            apply_expiration(request_data, data)
+            apply_expiration(
+                request_data,
+                data,
+                symbol=data["symbol"],
+                symbol_tick_time=_tick_time(data["symbol"]),
+            )
         except ServerOffsetUnavailable as error:
             return validation_error_response(str(error))
 
@@ -1189,7 +1207,13 @@ def modify_order(ticket):
         }
 
         try:
-            apply_expiration(request_data, data, existing_order=order)
+            apply_expiration(
+                request_data,
+                data,
+                existing_order=order,
+                symbol=order.symbol,
+                symbol_tick_time=_tick_time(order.symbol),
+            )
         except ServerOffsetUnavailable as error:
             return validation_error_response(str(error))
 

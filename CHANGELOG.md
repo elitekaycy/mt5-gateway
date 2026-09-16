@@ -4,6 +4,39 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.15] - 2026-09-16
+
+### Fixed
+
+- GTD expiries on brokers without a plain `EURUSD` symbol (suffixed names such
+  as `EURUSDm`, crypto-only accounts): the broker UTC offset is now derived from
+  the freshest visible Market Watch quote at connect and from each GTD order's
+  own symbol, instead of a hard-coded reference symbol. Previously every GTD
+  order on such accounts was refused with "broker UTC offset unknown" (#93).
+- The derived offset is refreshed every `MT5_TIME_REFRESH_SECONDS` (default
+  10 min) while connected, so a DST switch or a market closed at boot no longer
+  leaves it wrong or missing for the life of the connection. A derived value
+  older than `MT5_TIME_MAX_OFFSET_AGE_SECONDS` is not used for GTD conversion.
+
+### Added
+
+- `MT5_SERVER_TIME_ZONE` (IANA zone) as a DST-correct explicit override.
+- `GET /health` reports `server_time`: the offset in force, its source, the
+  symbol it came from, when it was derived and its age.
+
+### Removed
+
+- Dead `Settings.server_utc_offset_seconds` (defaulted to 0 and was unused).
+
+### Build
+
+- The MT5-installer layer logs each attempt's exit status, tells `timeout`'s 124
+  apart from a crash, and prints free space before the install and again on
+  failure. A failed install previously surfaced only as a bare
+  `test -f terminal64.exe`, which made a starved build disk look like a Wine
+  bug (#96). Note the installer exits non-zero even on a good install, so the
+  terminal check still decides success.
+
 ## [0.3.12] - 2026-08-18
 
 ### Added

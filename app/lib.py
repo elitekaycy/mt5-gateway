@@ -3,6 +3,7 @@ import threading
 from collections import OrderedDict
 
 import pandas as pd
+from close_confirm import confirm_close
 
 from constants import ORDER_TYPE_TO_STRING, MT5Timeframe
 from mt5_connection import mt5
@@ -214,6 +215,9 @@ def close_all_positions(order_type="all", magic=None):
                 result_data = order_result._asdict()
                 result_data["partial"] = info.name == "DONE_PARTIAL"
                 if info.is_success:
+                    result_data["fill_price_source"] = confirm_close(
+                        result_data, int(position["ticket"]), None
+                    )
                     closed.append(result_data)
                 else:
                     failed.append(

@@ -4,6 +4,27 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.17] - 2026-09-24
+
+### Fixed
+
+- Closes report the executed deal on dealer-desk servers. `/close_position`,
+  `/position_close_partial` and `/close_all_positions` relayed the raw
+  acknowledgement, which The5ers returns with price 0.0 and deal 0; qkt booked a
+  live close at 0 (realized -4,366 against a real -107.79) and flattened a book.
+  A close without a price or deal is now confirmed from the position's closing
+  deal within `MT5_FILL_CONFIRM_TIMEOUT_MS`, and each close response carries
+  `fill_price_source` (`order_send`, `deal` or `unresolved`).
+- `GET /history_deals_get?position=N` returns only that position's deals. MT5
+  ignores `position` when a date range is also passed, so the route returned
+  every deal in the range.
+- `promote-to-main` no longer hangs waiting for checks on the promote PR. That
+  PR is opened with `GITHUB_TOKEN`, so GitHub never runs workflows on it; the
+  0.3.15 and 0.3.16 promotions both had to be finished by hand. The workflow
+  now waits for `check` to pass on the exact dev commit it promotes (instead of
+  trusting the latest run on dev), requires the promote tree to equal that
+  commit's, and merges with `--match-head-commit`.
+
 ## [0.3.16] - 2026-09-24
 
 ### Fixed

@@ -134,15 +134,75 @@ def test_derive_from_tick_ignores_a_stale_tick_and_keeps_the_cache():
     assert resolve_offset_seconds() == 3 * _HOUR
 
 
-def test_a_changed_derived_offset_is_logged_as_a_warning(caplog):
+def test_a_changed_offset_is_adopted_only_once_confirmed(caplog):
+    # A DST switch: the new value arrives twice in a row and is adopted, with a WARNING.
     from time_utils import derive_from_tick
 
     now = 1_785_000_000
     derive_from_tick("EURUSDm", now + 3 * _HOUR, utc_now=now)
     with caplog.at_level("WARNING", logger="time_utils"):
         derive_from_tick("EURUSDm", now + 2 * _HOUR, utc_now=now)
-    assert any("10800 -> 7200" in record.getMessage() for record in caplog.records)
+        assert resolve_offset_seconds() == 3 * _HOUR
+        derive_from_tick("EURUSDm", now + 600 + 2 * _HOUR, utc_now=now + 600)
     assert resolve_offset_seconds() == 2 * _HOUR
+    assert any("10800 -> 7200" in record.getMessage() for record in caplog.records)
+
+
+def test_a_single_disagreeing_reading_never_replaces_the_offset():
+    # The 2026-09-23 incident: one reading of -3600 on a UTC server must not stick.
+    from time_utils import derive_from_tick
+
+    now = 1_785_000_000
+    derive_from_tick("BTCUSDm", now + 1, utc_now=now)
+    derive_from_tick("BTCUSDm", now + 600 - _HOUR, utc_now=now + 600)
+    derive_from_tick("BTCUSDm", now + 1200 + 1, utc_now=now + 1200)
+    derive_from_tick("BTCUSDm", now + 1800 - _HOUR, utc_now=now + 1800)
+
+    assert resolve_offset_seconds() == 0
+
+
+def test_the_confirmation_count_is_configurable(monkeypatch):
+    from time_utils import derive_from_tick
+
+    monkeypatch.setenv("MT5_TIME_OFFSET_CONFIRMATIONS", "3")
+    now = 1_785_000_000
+    derive_from_tick("EURUSDm", now + 3 * _HOUR, utc_now=now)
+    for step in (1, 2):
+        derive_from_tick("EURUSDm", now + step + 2 * _HOUR, utc_now=now + step)
+        assert resolve_offset_seconds() == 3 * _HOUR
+    derive_from_tick("EURUSDm", now + 3 + 2 * _HOUR, utc_now=now + 3)
+    assert resolve_offset_seconds() == 2 * _HOUR
+
+
+def test_clearing_the_offset_also_drops_a_pending_candidate():
+    from time_utils import derive_from_tick
+
+    now = 1_785_000_000
+    derive_from_tick("EURUSDm", now, utc_now=now)
+    derive_from_tick("EURUSDm", now + _HOUR, utc_now=now)
+    set_derived_offset(None)
+    derive_from_tick("EURUSDm", now + _HOUR, utc_now=now)
+
+    assert resolve_offset_seconds() == _HOUR
+
+
+def test_live_tick_is_the_freshest_symbol_whose_quote_advanced():
+    from time_utils import live_tick
+
+    before = {"EURUSDm": 1_000, "BTCUSDm": 5_000, "XAUUSDm": 9_000}
+    after = {"EURUSDm": 1_250, "BTCUSDm": 5_400, "XAUUSDm": 9_000}
+    # XAUUSDm is newest but did not move; BTCUSDm is the freshest live quote.
+    assert live_tick(before, after) == ("BTCUSDm", 5_400)
+
+
+def test_live_tick_is_none_when_every_quote_is_frozen():
+    # A stalled feed, however old, repeats its last tick and never derives.
+    from time_utils import live_tick
+
+    frozen = {"EURUSDm": 1_000, "BTCUSDm": 5_000}
+    assert live_tick(frozen, dict(frozen)) is None
+    assert live_tick({}, {"BTCUSDm": 5_000}) is None
+    assert live_tick({"BTCUSDm": 5_000}, {"BTCUSDm": None}) is None
 
 
 def test_a_cached_offset_older_than_the_max_age_is_not_used_for_gtd(monkeypatch):
@@ -155,15 +215,6 @@ def test_a_cached_offset_older_than_the_max_age_is_not_used_for_gtd(monkeypatch)
     assert utc_epoch_to_server(now + 1800, utc_now=now + 1800) == now + 1800 + 3 * _HOUR
     with pytest.raises(ServerOffsetUnavailable):
         utc_epoch_to_server(now + 7200, utc_now=now + 7200)
-
-
-def test_freshest_tick_picks_the_most_recent_quote():
-    from time_utils import freshest_tick
-
-    ticks = [("EURUSDm", 100), ("BTCUSDm", 250), ("XAUUSDm", 0), ("GBPUSDm", None)]
-    assert freshest_tick(ticks) == ("BTCUSDm", 250)
-    assert freshest_tick([]) is None
-    assert freshest_tick([("XAUUSDm", 0)]) is None
 
 
 def test_status_reports_unresolved_when_nothing_is_known():

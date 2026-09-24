@@ -4,6 +4,15 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- `promote-to-main` no longer hangs waiting for checks on the promote PR. That
+  PR is opened with `GITHUB_TOKEN`, so GitHub never runs workflows on it; the
+  0.3.15 and 0.3.16 promotions both had to be finished by hand. The workflow
+  now waits for `check` to pass on the exact dev commit it promotes (instead of
+  trusting the latest run on dev), requires the promote tree to equal that
+  commit's, and merges with `--match-head-commit`.
+
 ## [0.3.16] - 2026-09-24
 
 ### Fixed

@@ -4,9 +4,15 @@ name: promote-to-main
 # (or `gh workflow run promote-to-main.yml`) after inspecting dev. Branch
 # protection blocks direct pushes and fast-forwards, and merges made with
 # GITHUB_TOKEN do not themselves trigger other workflows — so promotion works
-# through a PR: verify dev is green, build a promote branch (dev + a merge of
-# main, so the squash-only history still merges cleanly), wait for its checks,
-# squash-merge, tag the release, then dispatch the image build on main.
+# through a PR: wait for check to pass on the exact dev commit, build a promote
+# branch (dev + a merge of main, so the squash-only history still merges
+# cleanly) whose tree must equal that commit's, squash-merge it, tag the
+# release, then dispatch the image build on main.
+#
+# The promote PR itself never gets checks: it is opened with GITHUB_TOKEN, and
+# GitHub runs no workflows for events that token creates. Waiting on them hung
+# every promotion until someone cancelled it (0.3.15, 0.3.16). The dev commit's
+# own check run is the evidence instead, which the tree assertion makes exact.
 
 on:
   workflow_dispatch:
@@ -27,16 +33,27 @@ jobs:
           ref: dev
           fetch-depth: 0
 
-      - name: Verify check passed on dev
+      - name: Wait for check to pass on the dev commit
         run: |
           set -e
-          conclusion=$(gh run list --workflow check.yml --branch dev \
-            --limit 1 --json conclusion --jq '.[0].conclusion')
-          echo "latest check run on dev: '$conclusion'"
-          if [ "$conclusion" != "success" ]; then
-            echo "::error::dev's latest check run is '$conclusion', not 'success' — refusing to promote"
-            exit 1
-          fi
+          sha=$(git rev-parse HEAD)
+          echo "dev_sha=$sha" >> "$GITHUB_ENV"
+          for _ in $(seq 1 45); do
+            run=$(gh run list --workflow check.yml --branch dev --event push \
+              --commit "$sha" --limit 1 --json status,conclusion \
+              --jq '.[] | "\(.status) \(.conclusion)"')
+            echo "check on dev $sha: '${run:-none yet}'"
+            case "$run" in
+              "completed success") exit 0 ;;
+              completed*)
+                echo "::error::check on dev $sha is '$run' — refusing to promote"
+                exit 1
+                ;;
+            esac
+            sleep 60
+          done
+          echo "::error::timed out waiting for check on dev $sha"
+          exit 1
 
       - name: Guard version and tag
         run: |
@@ -55,12 +72,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           branch="promote/$version"
-          git checkout -B "$branch" origin/dev
+          git checkout -B "$branch" "$dev_sha"
           # main is promotion-only: each of its commits is a squash of code that
           # already landed on dev, so main's content is never newer than dev's.
           # Refuse if anything else ever lands there — a hotfix committed straight
           # to main would be real work, and discarding it silently is not ours to do.
-          unexpected=$(git log --format='%h %s' origin/dev..origin/main \
+          unexpected=$(git log --format='%h %s' "$dev_sha"..origin/main \
             | grep -v 'chore: promote gateway' || true)
           if [ -n "$unexpected" ]; then
             echo "::error::main carries commits that are not promotions; merge them into dev by hand first:"
@@ -72,11 +89,12 @@ jobs:
           # same changes under different commits (#67) — that is what broke the
           # 0.3.15 promotion. `-s ours` is correct precisely because main adds nothing.
           git merge -s ours origin/main --no-edit
-          if ! git diff --quiet origin/dev HEAD; then
+          if ! git diff --quiet "$dev_sha" HEAD; then
             echo "::error::promote branch tree differs from dev after the merge; refusing"
-            git diff --stat origin/dev HEAD
+            git diff --stat "$dev_sha" HEAD
             exit 1
           fi
+          echo "promote_sha=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           git push -f origin "$branch"
 
       - name: Open or reuse promote PR
@@ -93,31 +111,11 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "promote PR: $url"
 
-      - name: Wait for promote PR checks
-        run: |
-          set -e
-          branch="promote/$version"
-          for i in $(seq 1 45); do
-            sleep 60
-            if out=$(gh pr checks "$branch" 2>&1); then
-              echo "checks green"
-              exit 0
-            fi
-            if echo "$out" | grep -qiE '\bfail|error'; then
-              echo "::error::promote PR checks failed:"
-              echo "$out"
-              exit 1
-            fi
-            echo "checks pending ($i/45)"
-          done
-          echo "::error::timed out waiting for promote PR checks"
-          exit 1
-
       - name: Merge, tag, release, dispatch image build
         run: |
           set -e
           branch="promote/$version"
-          gh pr merge "$branch" --squash --delete-branch
+          gh pr merge "$branch" --squash --delete-branch --match-head-commit "$promote_sha"
           git fetch origin main
           sha=$(git rev-parse origin/main)
           gh release create "v$version" --generate-notes --title "v$version" --target "$sha"

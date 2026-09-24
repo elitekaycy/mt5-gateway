@@ -179,9 +179,15 @@ def history_deals_get_endpoint():
             return validation_error_response(str(e))
 
         if position is not None:
-            deals = mt5.history_deals_get(
-                from_timestamp, to_timestamp, position=position
-            )
+            # MT5 ignores `position` when a date range is also passed and returns
+            # every deal in the range; query by position and apply the window here.
+            deals = mt5.history_deals_get(position=position)
+            if deals is not None:
+                deals = [
+                    deal
+                    for deal in deals
+                    if from_timestamp <= deal.time <= to_timestamp
+                ]
         else:
             deals = mt5.history_deals_get(from_timestamp, to_timestamp)
 

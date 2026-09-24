@@ -35,14 +35,18 @@ by hand over VNC on `:3000`.
 |---|---|---|
 | `MT5_SERVER_TIME_ZONE` | unset | IANA zone of the broker's trade server (e.g. `Europe/Athens`, `Etc/UTC`). Converted per instant, so it stays right across DST. When set it always wins. |
 | `MT5_SERVER_UTC_OFFSET_SECONDS` | unset | Fixed broker offset from UTC in seconds (e.g. `10800`). Kept for compatibility; it does not follow DST, prefer `MT5_SERVER_TIME_ZONE`. Wins over derivation. |
-| `MT5_TIME_REFERENCE_SYMBOL` | unset | Symbol to try first when deriving the offset. Unset, the gateway uses the freshest quote among the symbols visible in Market Watch, so any broker naming (`EURUSDm`, `EURUSD.pro`, crypto-only accounts) works with no configuration. |
-| `MT5_TIME_DERIVE_ATTEMPTS` | `10` | Polling attempts for a fresh-enough quote when deriving the offset at connect. |
+| `MT5_TIME_REFERENCE_SYMBOL` | unset | Symbol to try first when deriving the offset. Unset, the gateway uses the freshest live quote among the symbols visible in Market Watch, so any broker naming (`EURUSDm`, `EURUSD.pro`, crypto-only accounts) works with no configuration. |
+| `MT5_TIME_DERIVE_ATTEMPTS` | `10` | Reads of the candidate quotes when deriving the offset. Only a quote whose tick advanced since the previous read may derive; a frozen quote (closed market, stalled feed) never does, however recent it looks. |
 | `MT5_TIME_DERIVE_DELAY` | `0.5` | Seconds between those polling attempts. |
-| `MT5_TIME_REFRESH_SECONDS` | `600` | How often the offset is re-derived while connected (DST switches, markets that were closed at boot). `0` disables the refresh. A changed value is logged at WARNING. |
+| `MT5_TIME_REFRESH_SECONDS` | `600` | How often the offset is re-derived while connected (DST switches, markets that were closed at boot). `0` disables the refresh. |
+| `MT5_TIME_OFFSET_CONFIRMATIONS` | `2` | Live readings in a row a different value needs before it replaces the cached offset. Each disagreement and the switch log a WARNING. A DST change is adopted one refresh later; a single bad reading never. |
 | `MT5_TIME_MAX_OFFSET_AGE_SECONDS` | `21600` | A derived offset older than this is not used for GTD conversion; the order is refused until a fresh quote refreshes it. |
+| `MT5_TIME_ORDER_DERIVE_ATTEMPTS` | `5` | When a GTD order finds no usable offset, reads of its own symbol's quote waiting for it to move. |
+| `MT5_TIME_ORDER_DERIVE_DELAY` | `0.2` | Seconds between those reads. |
 
-Every GTD order also derives the offset from its own symbol's latest quote when that quote
-is fresh, so a broker whose reference symbols never quote still places GTD orders correctly.
+A GTD order uses the cached offset. Only when none is usable does it derive one from its own
+symbol, once that quote is seen to move, so a broker whose reference symbols never quote still
+places GTD orders correctly.
 `GET /health` reports the offset in force under `server_time` (`offset_seconds`, `source`,
 `symbol`, `derived_at`, `age_seconds`).
 

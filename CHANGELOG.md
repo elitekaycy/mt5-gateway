@@ -4,6 +4,21 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- The derived broker UTC offset could latch a wrong value from a stale quote: a
+  quote frozen for close to a whole number of hours (a stalled feed) rounded
+  cleanly to an offset. On a UTC server a network drop produced `-3600`, which
+  labelled every bar an hour ahead for up to six hours. Only a quote whose tick
+  advanced between two reads may now derive the offset, at refresh and on GTD
+  orders.
+- A derived value that disagrees with the cached offset replaces it only after
+  `MT5_TIME_OFFSET_CONFIRMATIONS` live readings in a row (default 2); a single
+  bad reading can no longer move it.
+- GTD orders use the cached offset and derive from their own symbol only when no
+  usable offset exists (`MT5_TIME_ORDER_DERIVE_ATTEMPTS`,
+  `MT5_TIME_ORDER_DERIVE_DELAY`).
+
 ## [0.3.15] - 2026-09-16
 
 ### Fixed

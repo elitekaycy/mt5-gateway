@@ -5,16 +5,17 @@ MT5 reports and expects timestamps in *broker-server* time, which is rarely UTC
 GTD expiry the wrong way makes the broker drop the order hours early, or reject it
 outright (retcode 10022) when the mis-shifted deadline lands in the past.
 
-The offset is resolved in priority order: an explicit ``MT5_SERVER_UTC_OFFSET_SECONDS``
-env always wins; otherwise a value derived from a fresh broker quote at connect time
-(see ``derive_offset_from_server_epoch``); otherwise it is unknown. When it is
-unknown, outbound conversion fails loud rather than silently assuming UTC.
+The offset is resolved in priority order: an explicit ``MT5_SERVER_TIME_ZONE`` or
+``MT5_SERVER_UTC_OFFSET_SECONDS`` always wins; otherwise a value derived from a live broker
+quote, one whose tick advanced between two reads (see ``live_tick`` and
+``derive_from_tick``); otherwise it is unknown. When it is unknown, outbound conversion
+fails loud rather than silently assuming UTC.
 """
 
 import logging
 import os
 import time
-from collections.abc import Iterable
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any, Optional, Union
 from zoneinfo import ZoneInfo
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 _ENV_VAR = "MT5_SERVER_UTC_OFFSET_SECONDS"
 _ZONE_ENV_VAR = "MT5_SERVER_TIME_ZONE"
 _MAX_AGE_ENV_VAR = "MT5_TIME_MAX_OFFSET_AGE_SECONDS"
+_CONFIRMATIONS_ENV_VAR = "MT5_TIME_OFFSET_CONFIRMATIONS"
+_DEFAULT_CONFIRMATIONS = 2
 _DEFAULT_MAX_AGE_SECONDS = 6 * 3600
 _HOUR = 3600
 # A live quote lags server-now by at most a few seconds, so a genuine offset rounds
@@ -38,6 +41,10 @@ _MAX_OFFSET_SECONDS = 14 * _HOUR
 _derived_offset_seconds: Optional[int] = None
 _derived_symbol: Optional[str] = None
 _derived_at: Optional[float] = None
+# A live reading that disagrees with the cached offset, and how many times in a row it
+# has been seen. It replaces the cache only once confirmed.
+_pending_offset_seconds: Optional[int] = None
+_pending_count = 0
 
 
 class ServerOffsetUnavailable(RuntimeError):
@@ -72,8 +79,14 @@ def set_derived_offset(
     symbol: Optional[str] = None,
     derived_at: Optional[float] = None,
 ) -> None:
-    """Cache an offset derived from broker server time; pass None to clear it."""
+    """Cache an offset derived from broker server time; pass None to clear it.
+
+    Either way any unconfirmed candidate is dropped.
+    """
     global _derived_offset_seconds, _derived_symbol, _derived_at
+    global _pending_offset_seconds, _pending_count
+    _pending_offset_seconds = None
+    _pending_count = 0
     _derived_offset_seconds = seconds
     _derived_symbol = symbol if seconds is not None else None
     if seconds is None:
@@ -85,6 +98,25 @@ def set_derived_offset(
 def max_offset_age_seconds() -> int:
     """How old a derived offset may be before GTD conversion stops trusting it."""
     return int(os.getenv(_MAX_AGE_ENV_VAR, str(_DEFAULT_MAX_AGE_SECONDS)))
+
+
+def offset_confirmations() -> int:
+    """How many live readings in a row a new value needs before it replaces the cache."""
+    return max(1, int(os.getenv(_CONFIRMATIONS_ENV_VAR, str(_DEFAULT_CONFIRMATIONS))))
+
+
+def offset_usable_for_gtd(now: Optional[Union[int, float]] = None) -> bool:
+    """True when a GTD conversion would succeed without deriving first.
+
+    That is an explicit zone or seconds setting, or a derived value younger than
+    ``MT5_TIME_MAX_OFFSET_AGE_SECONDS``.
+    """
+    moment = float(now) if now is not None else time.time()
+    if _zone_offset_seconds(moment) is not None or _env_offset_seconds() is not None:
+        return True
+    if _derived_offset_seconds is None or _derived_at is None:
+        return False
+    return moment - _derived_at <= max_offset_age_seconds()
 
 
 def resolve_offset_seconds(
@@ -109,16 +141,23 @@ def derive_from_tick(
     tick_time: Union[int, float, None],
     utc_now: Optional[Union[int, float]] = None,
 ) -> Optional[int]:
-    """Derive the offset from one quote on [symbol] and cache it when it is fresh.
+    """Derive the offset from a live quote on [symbol] and cache it.
 
-    Any symbol that quotes on the account will do, which is what makes derivation work
-    on brokers with suffixed names or no EUR/USD at all. A stale quote is ignored and
-    leaves the cache as it was. A value that differs from the cached one is logged at
-    WARNING: that is how a DST switch shows up.
+    Callers pass only quotes proven live (see ``live_tick``): a frozen quote repeats its
+    last tick and can be stale by close to a whole number of hours, which would round to
+    a wrong offset. Any symbol that quotes on the account will do. A value that rounds
+    unclean is ignored and leaves the cache as it was.
+
+    A value that differs from the cached one replaces it only after
+    ``MT5_TIME_OFFSET_CONFIRMATIONS`` readings in a row (default 2); each disagreement and
+    the switch itself log a WARNING. A DST change is adopted one refresh later, a one-off
+    bad reading never. A reading that agrees with the cache refreshes it and drops any
+    candidate.
 
     Returns:
-        The derived offset, or None when the quote was missing or stale.
+        The offset this quote implies, or None when it was missing or rounded unclean.
     """
+    global _pending_offset_seconds, _pending_count
     if not tick_time:
         return None
     now = float(utc_now) if utc_now is not None else time.time()
@@ -126,24 +165,71 @@ def derive_from_tick(
     if derived is None:
         return None
     previous = _derived_offset_seconds
-    if previous is not None and previous != derived:
+    if previous is None or previous == derived:
+        set_derived_offset(derived, symbol=symbol, derived_at=now)
+        return derived
+    if _pending_offset_seconds == derived:
+        _pending_count += 1
+    else:
+        _pending_offset_seconds = derived
+        _pending_count = 1
+    needed = offset_confirmations()
+    if _pending_count >= needed:
         logger.warning(
-            "broker UTC offset changed %d -> %d (source=%s)", previous, derived, symbol
+            "broker UTC offset changed %d -> %d (source=%s, %d readings)",
+            previous,
+            derived,
+            symbol,
+            _pending_count,
         )
-    set_derived_offset(derived, symbol=symbol, derived_at=now)
+        set_derived_offset(derived, symbol=symbol, derived_at=now)
+    else:
+        logger.warning(
+            "broker UTC offset reading %d disagrees with %d (source=%s); keeping %d "
+            "until confirmed (%d/%d)",
+            derived,
+            previous,
+            symbol,
+            previous,
+            _pending_count,
+            needed,
+        )
     return derived
 
 
-def freshest_tick(
-    ticks: Iterable[tuple[str, Union[int, float, None]]],
+def tick_time_ms(tick: Any) -> Optional[int]:
+    """A tick's time in epoch milliseconds, or None when there is no tick.
+
+    Uses ``time_msc`` when the terminal reports it and falls back to ``time`` seconds,
+    so two reads inside the same second can still show a quote moving.
+    """
+    if tick is None:
+        return None
+    msc = getattr(tick, "time_msc", None)
+    if msc:
+        return int(msc)
+    seconds = getattr(tick, "time", None)
+    return int(seconds) * 1000 if seconds else None
+
+
+def live_tick(
+    before: Mapping[str, Optional[int]],
+    after: Mapping[str, Optional[int]],
 ) -> Optional[tuple[str, int]]:
-    """The (symbol, tick_time) with the latest time, ignoring missing or zero times."""
+    """The freshest (symbol, tick_ms) whose quote advanced between two reads.
+
+    A quote that did not move proves nothing about its age, so it is never a
+    candidate, however recent it looks. Missing or zero times are ignored.
+
+    e.g. before={"A": 1000, "B": 9000}, after={"A": 1250, "B": 9000} -> ("A", 1250).
+    """
     best: Optional[tuple[str, int]] = None
-    for symbol, tick_time in ticks:
-        if not tick_time:
+    for symbol, tick_ms in after.items():
+        previous = before.get(symbol)
+        if not tick_ms or not previous or tick_ms <= previous:
             continue
-        if best is None or tick_time > best[1]:
-            best = (symbol, int(tick_time))
+        if best is None or tick_ms > best[1]:
+            best = (symbol, int(tick_ms))
     return best
 
 

@@ -41,16 +41,15 @@ from order_requests import build_trade_request
 from order_time import apply_expiration
 from pretrade import PreTradeError, validate_order_intent, validate_price_band
 from retcodes import classify_retcode, success_state
-from time_utils import ServerOffsetUnavailable
+from time_utils import ServerOffsetUnavailable, tick_time_ms
 
 order_bp = Blueprint("order", __name__)
 logger = logging.getLogger(__name__)
 
 
-def _tick_time(symbol):
-    """Latest quote time for ``symbol``, or None when it has no quote right now."""
-    tick = mt5.symbol_info_tick(symbol)
-    return getattr(tick, "time", None) if tick is not None else None
+def _tick_reader(symbol):
+    """A callable returning ``symbol``'s latest quote time in epoch ms, or None."""
+    return lambda: tick_time_ms(mt5.symbol_info_tick(symbol))
 
 
 idempotency_store = IdempotencyStore(
@@ -369,7 +368,7 @@ def send_market_order_endpoint():
                 request_data,
                 data,
                 symbol=data["symbol"],
-                symbol_tick_time=_tick_time(data["symbol"]),
+                read_tick_ms=_tick_reader(data["symbol"]),
             )
         except ServerOffsetUnavailable as error:
             return validation_error_response(str(error))
@@ -657,7 +656,7 @@ def order_check_endpoint():
                 request_data,
                 data,
                 symbol=data["symbol"],
-                symbol_tick_time=_tick_time(data["symbol"]),
+                read_tick_ms=_tick_reader(data["symbol"]),
             )
         except ServerOffsetUnavailable as error:
             return validation_error_response(str(error))
@@ -1212,7 +1211,7 @@ def modify_order(ticket):
                 data,
                 existing_order=order,
                 symbol=order.symbol,
-                symbol_tick_time=_tick_time(order.symbol),
+                read_tick_ms=_tick_reader(order.symbol),
             )
         except ServerOffsetUnavailable as error:
             return validation_error_response(str(error))

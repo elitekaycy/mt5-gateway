@@ -10,8 +10,9 @@ import MetaTrader5 as _mt5
 
 from time_utils import (
     derive_from_tick,
-    freshest_tick,
+    live_tick,
     resolve_offset_seconds,
+    tick_time_ms,
 )
 
 logger = logging.getLogger(__name__)
@@ -226,11 +227,13 @@ class MT5Connection:
     def _refresh_server_offset(self) -> None:
         """Derive the broker UTC offset from a fresh quote and cache it for GTD math.
 
-        Runs on every (re)connect so it re-derives across DST. A symbol just added
-        to Market Watch reports a stale quote before its first fresh tick, so this
-        polls ``symbol_info_tick`` up to ``MT5_TIME_DERIVE_ATTEMPTS`` times
-        (``MT5_TIME_DERIVE_DELAY`` seconds apart) until a quote is fresh enough to
-        round cleanly to a whole-hour offset. Best-effort: an explicit
+        Runs on every (re)connect so it re-derives across DST. Only a live quote may
+        derive: this polls ``symbol_info_tick`` up to ``MT5_TIME_DERIVE_ATTEMPTS`` times
+        (``MT5_TIME_DERIVE_DELAY`` seconds apart) and uses the freshest symbol whose
+        tick advanced since the previous read. A frozen quote -- a symbol just added to
+        Market Watch, a closed market, or a feed stalled by a network drop -- repeats
+        its last tick and can be stale by close to a whole number of hours, so it never
+        derives. The first read is only a baseline. Best-effort: an explicit
         ``MT5_SERVER_UTC_OFFSET_SECONDS`` env is left to win, and if no fresh quote
         arrives (e.g. market closed) the offset stays unresolved so GTD placement
         fails loud rather than guessing UTC. Never propagates -- a derivation
@@ -242,24 +245,24 @@ class MT5Connection:
             candidates = self._offset_reference_symbols()
             derived = None
             used: Optional[str] = None
+            previous: dict = {}
             for attempt in range(attempts):
-                ticks = []
-                for symbol in candidates:
-                    tick = mt5.symbol_info_tick(symbol)
-                    ticks.append(
-                        (symbol, getattr(tick, "time", None) if tick else None)
-                    )
-                best = freshest_tick(ticks)
-                if best is not None:
-                    derived = derive_from_tick(best[0], best[1])
+                current = {
+                    symbol: tick_time_ms(mt5.symbol_info_tick(symbol))
+                    for symbol in candidates
+                }
+                live = live_tick(previous, current)
+                if live is not None:
+                    derived = derive_from_tick(live[0], live[1] / 1000)
                     if derived is not None:
-                        used = best[0]
+                        used = live[0]
                         break
+                previous = current
                 if attempt < attempts - 1:
                     time.sleep(delay)
             if derived is None:
                 logger.warning(
-                    "Broker UTC offset not derived: no fresh quote on %s after %d attempts",
+                    "Broker UTC offset not derived: no live quote on %s after %d attempts",
                     ", ".join(candidates[:8]) or "(no symbols)",
                     attempts,
                 )

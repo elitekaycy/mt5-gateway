@@ -1,8 +1,9 @@
 import logging
 import math
 
+from close_confirm import confirm_close
 from flasgger import swag_from
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 
 from decorators import require_mt5_connection
 from errors import (
@@ -26,6 +27,10 @@ from retcodes import classify_retcode
 
 position_bp = Blueprint("position", __name__)
 logger = logging.getLogger(__name__)
+
+
+def _request_id():
+    return getattr(g, "request_id", None)
 
 
 @position_bp.route("/close_position", methods=["POST"])
@@ -71,6 +76,9 @@ def close_position_endpoint():
             return mt5_error_response("Close position", result)
 
         result_data = result._asdict()
+        fill_price_source = confirm_close(
+            result_data, int(data["position"]["ticket"]), _request_id()
+        )
         partial = info.name == "DONE_PARTIAL"
         result_data["partial"] = partial
         if partial:
@@ -79,7 +87,11 @@ def close_position_endpoint():
                 0.0, original_volume - float(result.volume)
             )
         return jsonify(
-            {"message": "Position closed successfully", "result": result_data}
+            {
+                "message": "Position closed successfully",
+                "result": result_data,
+                "fill_price_source": fill_price_source,
+            }
         )
 
     except Exception as e:
@@ -212,18 +224,21 @@ def close_position_partial_endpoint():
             return mt5_error_response("Partial close position", result)
 
         info = classify_retcode(result.retcode)
-        filled_volume = float(getattr(result, "volume", volume))
+        result_data = result._asdict()
+        fill_price_source = confirm_close(result_data, ticket, _request_id())
+        filled_volume = float(result_data.get("volume") or volume)
         remaining_volume = max(0.0, float(position.volume) - filled_volume)
         logger.info(
-            f"Position {ticket} partially closed: {filled_volume} lots at {price}"
+            f"Position {ticket} partially closed: {filled_volume} lots at {result_data.get('price')}"
         )
 
         return jsonify(
             {
                 "message": "Position partially closed successfully",
-                "result": result._asdict(),
+                "result": result_data,
                 "partial": info.name == "DONE_PARTIAL",
                 "remaining_volume": remaining_volume,
+                "fill_price_source": fill_price_source,
             }
         )
 

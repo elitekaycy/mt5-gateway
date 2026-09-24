@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.17] - 2026-09-24
+
 ### Fixed
 
 - Closes report the executed deal on dealer-desk servers. `/close_position`,

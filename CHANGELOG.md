@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.16] - 2026-09-24
+
 ### Fixed
 
 - The derived broker UTC offset could latch a wrong value from a stale quote: a

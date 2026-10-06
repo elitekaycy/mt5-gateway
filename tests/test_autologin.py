@@ -111,3 +111,49 @@ def test_authorization_count_requires_a_new_journal_entry(tmp_path):
         handle.write("Network '123': authorized on Broker-Demo\r\n")
 
     assert authorization_count(tmp_path) == baseline + 1
+
+
+def test_session_marker_round_trip(tmp_path):
+    from autologin import session_attached, write_session_marker
+
+    marker = tmp_path / "session"
+    write_session_marker(marker, "476422618", now=1000.0)
+
+    assert session_attached(marker, "476422618", since=999.0)
+    assert session_attached(marker, " 476422618 ", since=1000.0)
+
+
+def test_stale_or_foreign_session_marker_is_not_an_authorization(tmp_path):
+    from autologin import session_attached, write_session_marker
+
+    marker = tmp_path / "session"
+    assert not session_attached(marker, "476422618", since=0.0)
+
+    write_session_marker(marker, "476422618", now=1000.0)
+    assert not session_attached(marker, "476422618", since=1000.5)
+    assert not session_attached(marker, "12345", since=0.0)
+
+    marker.write_text("garbage")
+    assert not session_attached(marker, "476422618", since=0.0)
+
+
+def test_reconnect_credentials_need_env_login():
+    from autologin import reconnect_credentials
+
+    assert reconnect_credentials({}, None) == {}
+    assert reconnect_credentials({"MT5_LOGIN": "x", "MT5_PASSWORD": "p"}, None) == {}
+
+    env = {"MT5_LOGIN": "42", "MT5_PASSWORD": "pw", "MT5_SERVER": "Broker-Demo"}
+    assert reconnect_credentials(env, None) == {
+        "login": 42,
+        "password": "pw",
+        "server": "Broker-Demo",
+    }
+    assert reconnect_credentials(env, " 1.2.3.4:443 ")["server"] == "1.2.3.4:443"
+
+
+def test_wine_path_maps_tmp_through_drive_z():
+    from autologin import wine_path
+
+    assert wine_path("/tmp/mt5-api-session", nt=False) == "/tmp/mt5-api-session"
+    assert wine_path("/tmp/mt5-api-session", nt=True) == r"Z:\tmp\mt5-api-session"

@@ -4,6 +4,23 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- The boot login loop no longer kills a terminal the API is attached to. It
+  counted only `authorized on` journal lines; on terminal build 6230 the first
+  login can land at the end of the 180 s window with the line not yet on disk,
+  so the loop killed a logged-in terminal and every later candidate collided
+  with the API's own relaunch (eleven minutes of IPC -10001/-10005 per boot on
+  bot2). The API now writes `/tmp/mt5-api-session` when it attaches, and the
+  loop counts that as authorized.
+- A reconnect logs a relaunched terminal in. `mt5.initialize()` without
+  credentials starts a terminal that never authorizes, so after any terminal
+  death the gateway stayed down until restarted. Reconnects now pass the
+  env-login credentials and the address that authorized at boot.
+- A failed reconnect backs off (`MT5_RECONNECT_COOLDOWN_SECONDS`, doubling to
+  `MT5_RECONNECT_COOLDOWN_MAX_SECONDS`) instead of every request starting
+  another `initialize()`.
+
 ## [0.3.17] - 2026-09-24
 
 ### Fixed

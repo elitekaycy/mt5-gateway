@@ -132,8 +132,22 @@ open('$ini_lin', 'w', newline='').write(render_start_ini(load_settings(os.enviro
 from autologin import authorization_count; \
 print(authorization_count(Path(sys.argv[1])))" "$jlogs"
     }
+    # The API writes this marker when it holds an MT5 session logged in to
+    # MT5_LOGIN. A terminal the API is attached to is authorized whatever the
+    # journal says: build 6230 can log in near the end of the window and write
+    # its "authorized on" line later still, and killing that terminal took the
+    # API's session down with it.
+    session_marker="${MT5_SESSION_MARKER:-/tmp/mt5-api-session}"
+    login_server_file="${MT5_LOGIN_SERVER_FILE:-/tmp/mt5-login-server}"
+    rm -f "$session_marker" "$login_server_file"
+    session_attached() {
+        python3 -c "import sys; from pathlib import Path; sys.path.insert(0, '/app'); \
+from autologin import session_attached; \
+sys.exit(0 if session_attached(Path(sys.argv[1]), sys.argv[2], float(sys.argv[3])) else 1)" \
+            "$session_marker" "$MT5_LOGIN" "$1"
+    }
     authorized() {
-        [ "$(authorization_count)" -gt "$1" ]
+        [ "$(authorization_count)" -gt "$1" ] || session_attached "$2"
     }
     first_candidate="$(head -n1 /tmp/mt5_candidates 2>/dev/null)"
 
@@ -144,15 +158,26 @@ print(authorization_count(Path(sys.argv[1])))" "$jlogs"
             log_message "INFO" "Login attempt via '$candidate'."
             render_ini "$candidate"
             authorization_baseline="$(authorization_count)"
+            attempt_started="$(date +%s)"
             "$wine_executable" "$mt5exe" "/config:C:\\start.ini" &
             # The first attempt gets a longer window: the terminal cold-starts and
             # compiles before it can even attempt a login.
-            tries=$([ "$first" -eq 1 ] && echo 36 || echo 18); first=0
+            tries=$([ "$first" -eq 1 ] && echo "${MT5_LOGIN_FIRST_TRIES:-36}" || echo "${MT5_LOGIN_TRIES:-18}"); first=0
             for _ in $(seq 1 "$tries"); do
-                authorized "$authorization_baseline" && { login_ok=1; break; }
+                authorized "$authorization_baseline" "$attempt_started" && { login_ok=1; break; }
                 sleep 5
             done
-            [ "$login_ok" -eq 1 ] && { log_message "INFO" "Authorized via '$candidate'."; break; }
+            # One last look before killing anything: never kill a terminal the API
+            # is attached to.
+            if [ "$login_ok" -ne 1 ] && authorized "$authorization_baseline" "$attempt_started"; then
+                login_ok=1
+            fi
+            if [ "$login_ok" -eq 1 ]; then
+                # Reconnects log a relaunched terminal in through the same address.
+                printf '%s\n' "$candidate" > "$login_server_file"
+                log_message "INFO" "Authorized via '$candidate'."
+                break
+            fi
             log_message "WARN" "No authorization via '$candidate'; trying next candidate."
             pkill -f terminal64.exe 2>/dev/null || true
             sleep 3

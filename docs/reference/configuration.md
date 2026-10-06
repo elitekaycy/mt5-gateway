@@ -27,6 +27,10 @@ by hand over VNC on `:3000`.
 | `MT5_API_PORT` | `5001` | Port the Flask API listens on inside the container. |
 | `MT5_RECONNECT_ATTEMPTS` | `3` | Reconnect attempts after a detected MT5 disconnect before giving up. |
 | `MT5_RECONNECT_BASE_DELAY` | `1.0` | Base seconds for reconnect backoff. |
+| `MT5_RECONNECT_COOLDOWN_SECONDS` | `5` | After a failed reconnect, requests fail fast for this long before the next `initialize()`; doubles per consecutive failure. |
+| `MT5_RECONNECT_COOLDOWN_MAX_SECONDS` | `60` | Cap on the reconnect back-off window. |
+| `MT5_LOGIN_FIRST_TRIES` | `36` | Boot login loop: 5-second polls for authorization on the first connect candidate. |
+| `MT5_LOGIN_TRIES` | `18` | Boot login loop: 5-second polls for each later candidate. |
 | `MT5_CONNECTION_VERIFY_TTL_SECONDS` | `30` | How long a verified-connected status is trusted before the next request re-probes MT5 live. |
 
 ## Optional — server time & GTD orders

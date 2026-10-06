@@ -3,11 +3,20 @@ import os
 import time
 from enum import Enum
 from functools import wraps
+from pathlib import Path
 from threading import Event, Lock, RLock, Thread, local
 from typing import Any, Callable, Optional
 
 import MetaTrader5 as _mt5
 
+from autologin import (
+    LOGIN_SERVER_FILE,
+    SESSION_MARKER,
+    read_login_server,
+    reconnect_credentials,
+    wine_path,
+    write_session_marker,
+)
 from time_utils import (
     derive_from_tick,
     live_tick,
@@ -131,6 +140,12 @@ class MT5Connection:
         self._last_verified_at = 0.0
         self._verify_lock = Lock()
         self._reconnect_lock = Lock()
+        self._cooldown_base = float(os.getenv("MT5_RECONNECT_COOLDOWN_SECONDS", "5"))
+        self._cooldown_max = float(
+            os.getenv("MT5_RECONNECT_COOLDOWN_MAX_SECONDS", "60")
+        )
+        self._failed_reconnects = 0
+        self._reconnect_not_before = 0.0
         self._offset_refresher: Optional[Thread] = None
         self._offset_refresh_stop = Event()
 
@@ -170,7 +185,15 @@ class MT5Connection:
     def get_last_error(self) -> Optional[str]:
         return self._last_error
 
-    def initialize(self) -> bool:
+    def initialize(self, credentials: Optional[dict] = None) -> bool:
+        """Attach to the terminal, retrying with backoff.
+
+        Args:
+            credentials: ``login``/``password``/``server`` passed to
+                ``mt5.initialize`` so a terminal it has to launch logs in. The
+                boot attach passes none: the boot script's terminal is already
+                logging in from its ini, and a second login would race it.
+        """
         attempt = 0
         while attempt < self._max_reconnect_attempts:
             attempt += 1
@@ -182,7 +205,10 @@ class MT5Connection:
                 )
 
             try:
-                if mt5.initialize():
+                attached = (
+                    mt5.initialize(**credentials) if credentials else mt5.initialize()
+                )
+                if attached:
                     account_info = mt5.account_info()
                     if account_info is not None:
                         logger.info(
@@ -194,6 +220,7 @@ class MT5Connection:
                             },
                         )
                         self._set_status(ConnectionStatus.CONNECTED)
+                        self._mark_session(account_info.login)
                         self._refresh_server_offset()
                         self.start_offset_refresher()
                         return True
@@ -223,6 +250,52 @@ class MT5Connection:
         logger.error(final_error)
         self._set_status(ConnectionStatus.DISCONNECTED, final_error)
         return False
+
+    @staticmethod
+    def _mark_session(login: Any) -> None:
+        """Tell the boot login loop the API holds a logged-in session (best effort)."""
+        marker = os.getenv("MT5_SESSION_MARKER", SESSION_MARKER)
+        try:
+            write_session_marker(
+                Path(wine_path(marker, os.name == "nt")), str(login), time.time()
+            )
+        except OSError as error:
+            logger.warning("Session marker not written: %s", error)
+
+    @staticmethod
+    def _reconnect_credentials() -> dict:
+        """Credentials for a reconnect, so a terminal it relaunches logs in."""
+        server_file = os.getenv("MT5_LOGIN_SERVER_FILE", LOGIN_SERVER_FILE)
+        login_server = read_login_server(Path(wine_path(server_file, os.name == "nt")))
+        return reconnect_credentials(os.environ, login_server)
+
+    def _reconnect_cooling_down(self) -> bool:
+        """True inside the back-off window that follows a failed reconnect."""
+        return time.monotonic() < self._reconnect_not_before
+
+    def _note_reconnect_outcome(self, connected: bool) -> None:
+        """Reset the back-off on success; double it (capped) on failure.
+
+        Without it every request that arrives after a failed reconnect starts
+        another ``initialize()``, and each one can launch a terminal of its
+        own; under a steady client load that is a relaunch storm racing the
+        boot login loop for the terminal's single-instance lock.
+        """
+        if connected:
+            self._failed_reconnects = 0
+            self._reconnect_not_before = 0.0
+            return
+        self._failed_reconnects += 1
+        delay = min(
+            self._cooldown_max,
+            self._cooldown_base * (2 ** (self._failed_reconnects - 1)),
+        )
+        self._reconnect_not_before = time.monotonic() + delay
+        logger.warning(
+            "MT5 reconnect failed; next attempt in %.0fs",
+            delay,
+            extra={"failed_reconnects": self._failed_reconnects},
+        )
 
     def _refresh_server_offset(self) -> None:
         """Derive the broker UTC offset from a fresh quote and cache it for GTD math.
@@ -376,27 +449,34 @@ class MT5Connection:
             if self._verify_live_connection():
                 return True
 
+        if self._reconnect_cooling_down():
+            return False
         if not self._reconnect_lock.acquire(blocking=False):
             logger.warning("MT5 reconnect already in progress; failing fast")
             return False
         try:
             if self.is_connected():
                 return True
+            if self._reconnect_cooling_down():
+                return False
             logger.info("Attempting to reconnect to MT5")
             from metrics import metrics
             from reconciliation import reconcile
 
             metrics.inc("mt5_reconnects_total")
-            if not self.initialize():
+            if not self.initialize(self._reconnect_credentials()):
                 metrics.set("mt5_connected", 0)
+                self._note_reconnect_outcome(False)
                 return False
             try:
                 reconcile()
             except RuntimeError as error:
                 self._set_status(ConnectionStatus.DISCONNECTED, str(error))
                 metrics.set("mt5_connected", 0)
+                self._note_reconnect_outcome(False)
                 return False
             metrics.set("mt5_connected", 1)
+            self._note_reconnect_outcome(True)
             return True
         finally:
             self._reconnect_lock.release()

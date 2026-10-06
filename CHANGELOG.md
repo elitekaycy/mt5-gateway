@@ -4,6 +4,16 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.19] - 2026-10-06
+
+### Security
+
+- Image dependencies: brace-expansion 1.1.20 (CVE-2026-102276/-102278),
+  engine.io 6.6.10 (CVE-2026-102599) and proxy-addr 2.0.8 (CVE-2026-90711)
+  through the kclient npm overrides. The Linux-side pip is no longer upgraded:
+  it is unused at runtime and pip 26.2.1 vendors urllib3 2.7.0
+  (CVE-2026-97687/-97689). Trivy blocked the 0.3.18 image publish on these.
+
 ## [0.3.18] - 2026-10-06
 
 ### Fixed

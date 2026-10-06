@@ -27,8 +27,10 @@ RUN apt-get update && apt-get install -y \
   netcat-openbsd \
   gnupg \
   software-properties-common \
-  xvfb \
-  && pip3 install --upgrade pip
+  xvfb
+# The Linux pip is never used after this layer (app deps install into Wine's
+# Python), so it stays Debian's: upgrading it vendored urllib3 2.7.0
+# (CVE-2026-97687/-97689) into the image for nothing.
 
 # 5. MODERN WineHQ Key Handling (apt-key is deprecated)
 # This downloads the key, de-armors it, and places it in a dedicated keyring
@@ -58,8 +60,9 @@ RUN test -n "$WINE_LAYER_REV" && \
     overrides.path-to-regexp=0.1.13 \
     'overrides[socket.io-parser]=4.2.7' \
     overrides.ws=8.21.0 \
-    overrides.brace-expansion=1.1.18 \
-    'overrides[engine.io]=6.6.7' \
+    overrides.brace-expansion=1.1.20 \
+    'overrides[engine.io]=6.6.10' \
+    overrides.proxy-addr=2.0.8 \
   && npm install --omit=dev --ignore-scripts \
   && cd / \
   && rm -rf /usr/lib/node_modules/npm \

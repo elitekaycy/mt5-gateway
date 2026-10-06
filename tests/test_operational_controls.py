@@ -87,7 +87,7 @@ def test_reconnect_is_single_flight(monkeypatch):
     release = threading.Event()
     calls = []
 
-    def initialize():
+    def initialize(credentials=None):
         calls.append(1)
         entered.set()
         release.wait(timeout=1)

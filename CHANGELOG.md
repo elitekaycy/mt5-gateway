@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.19] - 2026-10-06
+
 ### Security
 
 - Image dependencies: brace-expansion 1.1.20 (CVE-2026-102276/-102278),

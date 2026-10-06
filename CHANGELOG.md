@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.18] - 2026-10-06
+
 ### Fixed
 
 - The boot login loop no longer kills a terminal the API is attached to. It

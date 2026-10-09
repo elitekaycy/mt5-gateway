@@ -4,7 +4,7 @@
 that treats this gateway as its MT5 broker backend — qkt never talks to MT5
 directly, it talks to mt5-gateway's HTTP API. This page covers the
 gateway side of that pairing; qkt's side is documented in
-[qkt's Deploy on Exness (MT5) how-to](https://elitekaycy.github.io/qkt/how-to/deploy-exness/).
+[qkt's Deploy on Exness (MT5) how-to](https://qkt.elitekaycy.com/how-to/deploy-exness/).
 
 ## The relationship
 
@@ -106,5 +106,5 @@ remains available as a manual-login fallback either way.
 ## See also
 
 - [qkt on GitHub](https://github.com/elitekaycy/qkt)
-- [qkt's Deploy on Exness (MT5) how-to](https://elitekaycy.github.io/qkt/how-to/deploy-exness/)
+- [qkt's Deploy on Exness (MT5) how-to](https://qkt.elitekaycy.com/how-to/deploy-exness/)
 - [Configuration](../reference/configuration.md) for every gateway-side env var

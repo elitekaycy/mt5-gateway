@@ -3,10 +3,10 @@
 [![CI](https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml/badge.svg)](https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/elitekaycy/mt5-gateway-api)](https://hub.docker.com/r/elitekaycy/mt5-gateway-api)
-[![Docs](https://img.shields.io/badge/docs-elitekaycy.github.io%2Fmt5--gateway-2f9e6e)](https://elitekaycy.github.io/mt5-gateway/)
+[![Docs](https://img.shields.io/badge/docs-mt5.elitekaycy.com-2f9e6e)](https://mt5.elitekaycy.com/)
 
 <p align="center">
-  <a href="https://elitekaycy.github.io/mt5-gateway/"><img src="https://img.shields.io/badge/Visit%20Docs-14161B?style=for-the-badge&logo=readthedocs&logoColor=2f9e6e" alt="Visit Docs"></a>
+  <a href="https://mt5.elitekaycy.com/"><img src="https://img.shields.io/badge/Visit%20Docs-14161B?style=for-the-badge&logo=readthedocs&logoColor=2f9e6e" alt="Visit Docs"></a>
   <a href="#quick-start-with-docker-hub"><img src="https://img.shields.io/badge/Quickstart-14161B?style=for-the-badge&logo=gnubash&logoColor=2f9e6e" alt="Quickstart"></a>
   <a href="#configuration"><img src="https://img.shields.io/badge/Configuration-14161B?style=for-the-badge&logo=docker&logoColor=2f9e6e" alt="Configuration"></a>
 </p>
@@ -36,7 +36,7 @@ dummy values. See <a href="docs/assets/mt5-gateway-demo.tape">the VHS tape</a>
 for how this recording is built.</sub>
 
 Full documentation, with a step-by-step terminal install walkthrough and every
-config var explained, lives at **[elitekaycy.github.io/mt5-gateway](https://elitekaycy.github.io/mt5-gateway/)**.
+config var explained, lives at **[mt5.elitekaycy.com](https://mt5.elitekaycy.com/)**.
 
 ## Why this exists
 
@@ -152,7 +152,7 @@ docker compose --profile self-hosted-resolver up
 ```
 
 Full details and every knob: **[docs/headless-login.md](docs/headless-login.md)**
-(also on the [docs site](https://elitekaycy.github.io/mt5-gateway/headless-login/)).
+(also on the [docs site](https://mt5.elitekaycy.com/headless-login/)).
 
 ## Production Compose example
 
@@ -218,7 +218,7 @@ to MT5 access-point addresses during first boot.
 These three plus `API_KEY` are all headless login needs. Every other knob —
 resolver tuning, pre-trade limits, GTD/timezone handling, audit and
 kill-switch paths, CORS, VNC — is documented in full, core vs optional, in
-the **[Configuration reference](https://elitekaycy.github.io/mt5-gateway/reference/configuration/)**.
+the **[Configuration reference](https://mt5.elitekaycy.com/reference/configuration/)**.
 
 ## Ports
 
@@ -320,7 +320,7 @@ mutations also include a human-readable `message`, broker `result`, and
 operation-specific safety fields. Errors include `ok: false`, `error`, and
 `error_type`, with optional `details`, `request_id`, and `mt5_error`.
 Interactive endpoint schemas are available at `/apidocs`; see the
-[API reference](https://elitekaycy.github.io/mt5-gateway/reference/api/) for
+[API reference](https://mt5.elitekaycy.com/reference/api/) for
 the conventions above written out in full.
 
 ## Security posture
@@ -371,7 +371,7 @@ This gateway is designed to sit behind a trading engine rather than be driven
 by hand. [qkt](https://github.com/elitekaycy/qkt) — an event-driven trading
 engine — talks to it exactly this way: qkt never touches MT5 directly, it
 calls this gateway's REST API. See
-**[Using with qkt](https://elitekaycy.github.io/mt5-gateway/connect/qkt/)**
+**[Using with qkt](https://mt5.elitekaycy.com/connect/qkt/)**
 for the Compose wiring, healthcheck handshake, and multi-broker pattern.
 
 ## Development

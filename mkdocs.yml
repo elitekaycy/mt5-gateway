@@ -1,6 +1,6 @@
 site_name: mt5-gateway
 site_description: A headless REST API for MetaTrader 5, running under Wine on Linux in Docker.
-site_url: https://elitekaycy.github.io/mt5-gateway/
+site_url: https://mt5.elitekaycy.com/
 repo_url: https://github.com/elitekaycy/mt5-gateway
 repo_name: elitekaycy/mt5-gateway
 edit_uri: edit/main/docs/

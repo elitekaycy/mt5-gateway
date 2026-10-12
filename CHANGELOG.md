@@ -4,6 +4,14 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.20] - 2026-10-12
+
+### Documentation
+
+- The README is a short product page with a logo, a real walkthrough video and a
+  four-step quick start; reference material lives in the docs site. The docs
+  site gets the new logo and favicon. No code changes.
+
 ## [0.3.19] - 2026-10-06
 
 ### Security

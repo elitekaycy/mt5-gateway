@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="mt5-gateway">
+  <title>mt5-gateway</title>
+  <rect width="200" height="200" rx="44" fill="#0d1117"/>
+  <g fill="none" stroke-width="14">
+    <g stroke="#a78bfa" stroke-linejoin="miter">
+      <path d="M56 50H34v100h22"/>
+      <path d="M143 50h22v100h-22"/>
+    </g>
+    <g stroke="#e5e7eb" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M72 140V62l28 40 28-40v78"/>
+    </g>
+  </g>
+</svg>

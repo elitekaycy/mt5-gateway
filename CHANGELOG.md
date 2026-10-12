@@ -4,6 +4,15 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.21] - 2026-10-12
+
+### Security
+
+- The release image no longer reuses a stale cached OS-patch layer: it is keyed to the
+  ISO week, so the weekly Debian fixes (python3.11 deb12u9, gstreamer deb12u7) reach the
+  published image. The 0.3.20 image build was blocked by 37 HIGH findings from the old layer;
+  0.3.20 has no image.
+
 ## [0.3.20] - 2026-10-12
 
 ### Documentation

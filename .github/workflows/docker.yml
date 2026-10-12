@@ -53,6 +53,10 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      - name: Weekly OS patch revision
+        id: osrev
+        run: echo "rev=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
       - name: Build for security scan
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
@@ -65,7 +69,9 @@ jobs:
           # the MT5 layer on every release so the published image bakes the
           # freshest terminal (PR builds keep the default MT5_LAYER_REV).
           cache-from: type=gha,scope=mt5-gateway
-          build-args: MT5_LAYER_REV=${{ github.sha }}
+          build-args: |
+            MT5_LAYER_REV=${{ github.sha }}
+            OS_PATCH_REV=${{ steps.osrev.outputs.rev }}
 
       - name: Scan release candidate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -89,4 +95,6 @@ jobs:
           sbom: true
           cache-from: type=gha,scope=mt5-gateway
           cache-to: type=gha,mode=max,scope=mt5-gateway
-          build-args: MT5_LAYER_REV=${{ github.sha }}
+          build-args: |
+            MT5_LAYER_REV=${{ github.sha }}
+            OS_PATCH_REV=${{ steps.osrev.outputs.rev }}

@@ -13,8 +13,11 @@ RUN mkdir -p /config/.wine && \
   chown -R abc:abc /config/.wine && \
   chmod -R 755 /config/.wine
 
-# 3. Standard update (Backports removal logic is deleted as it's unnecessary here)
-RUN apt-get update && apt-get upgrade -y
+# 3. Standard update (Backports removal logic is deleted as it's unnecessary here).
+# OS_PATCH_REV changes weekly in the release build, so the cached layer is never reused with an older
+# week's package versions (a stale cache shipped python3.11 deb12u8 after deb12u9 was out).
+ARG OS_PATCH_REV=0
+RUN echo "os patch rev: ${OS_PATCH_REV}" && apt-get update && apt-get upgrade -y
 
 # 4. Install required packages
 # Added 'gnupg' and 'software-properties-common' for secure key handling

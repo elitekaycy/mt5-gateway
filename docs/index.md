@@ -44,13 +44,11 @@ itself in on boot — no Windows, no VNC, no manual clicking.
 <a id="see-it-boot"></a>
 
 <div class="mtg-demo" markdown="0">
-  <img src="assets/mt5-gateway-demo.gif"
-       alt="Pull the image, run it headless against a broker account, and confirm it's alive, logged in, and trading-ready — all from the terminal">
+  <img src="assets/mt5-gateway-loop-dark.webp"
+       alt="Pull the image, start it with a broker account, check it is ready, then place and close an order">
   <div class="mtg-demo__caption">
-    Pull the image, run it headless, confirm it's alive and trading-ready — the
-    exact commands from <a href="get-started/quickstart/">Quickstart</a>.
-    Recorded with <a href="https://github.com/charmbracelet/vhs">VHS</a>; the
-    tape is <a href="https://github.com/elitekaycy/mt5-gateway/blob/main/docs/assets/mt5-gateway-demo.tape">committed and regenerable</a>.
+    Pull the image, start it, check it is ready, place an order. Every command was run for real against a demo
+    account: they are the ones in <a href="get-started/quickstart/">Quickstart</a>.
   </div>
 </div>
 

@@ -15,11 +15,11 @@ exclude_docs: |
 
 theme:
   name: material
+  logo: assets/logo-icon.svg
   icon:
-    logo: material/finance
     repo: fontawesome/brands/github
     edit: material/pencil
-  favicon: assets/favicon-placeholder.svg
+  favicon: assets/logo-icon.svg
   palette:
     - scheme: slate
       primary: black

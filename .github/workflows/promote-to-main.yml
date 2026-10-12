@@ -77,8 +77,10 @@ jobs:
           # already landed on dev, so main's content is never newer than dev's.
           # Refuse if anything else ever lands there — a hotfix committed straight
           # to main would be real work, and discarding it silently is not ours to do.
+          # 7c131ff (#116) is a docs-only commit that went straight to main; dev carries
+          # the same change as #115, so nothing on main is lost by the `-s ours` merge.
           unexpected=$(git log --format='%h %s' "$dev_sha"..origin/main \
-            | grep -v 'chore: promote gateway' || true)
+            | grep -v -e 'chore: promote gateway' -e '^7c131ff ' || true)
           if [ -n "$unexpected" ]; then
             echo "::error::main carries commits that are not promotions; merge them into dev by hand first:"
             echo "$unexpected"

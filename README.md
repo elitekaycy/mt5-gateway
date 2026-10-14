@@ -102,12 +102,12 @@ interactive API at `http://localhost:5001/apidocs`.
 
 | I want to | Read |
 | --- | --- |
-| Call every endpoint | [API reference](https://mt5.elitekaycy.com/reference/api/) |
-| Change a setting | [Configuration](https://mt5.elitekaycy.com/reference/configuration/) |
-| Run it in production | [Production deploy](https://mt5.elitekaycy.com/get-started/production-deploy/) |
-| Trade with qkt | [Using with qkt](https://mt5.elitekaycy.com/connect/qkt/) |
-| Understand headless login | [How it works](https://mt5.elitekaycy.com/concepts/why-headless-login/) |
-| Keep it safe | [Health and safety](https://mt5.elitekaycy.com/operations/health-and-safety/) · [SECURITY.md](SECURITY.md) |
+| Call every endpoint | [API reference](https://mt5.tryqkt.com/reference/api/) |
+| Change a setting | [Configuration](https://mt5.tryqkt.com/reference/configuration/) |
+| Run it in production | [Production deploy](https://mt5.tryqkt.com/get-started/production-deploy/) |
+| Trade with qkt | [Using with qkt](https://mt5.tryqkt.com/connect/qkt/) |
+| Understand headless login | [How it works](https://mt5.tryqkt.com/concepts/why-headless-login/) |
+| Keep it safe | [Health and safety](https://mt5.tryqkt.com/operations/health-and-safety/) · [SECURITY.md](SECURITY.md) |
 | Contribute | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 <br/>

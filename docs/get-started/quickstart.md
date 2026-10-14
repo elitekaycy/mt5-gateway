@@ -5,8 +5,14 @@ Pull the published image:
 ```bash
 docker pull elitekaycy/mt5-gateway-api:latest
 # or pin a release:
-docker pull elitekaycy/mt5-gateway-api:0.3.10
+docker pull elitekaycy/mt5-gateway-api:0.3.21
 ```
+
+`0.3.21` is the newest published image. Later releases that change only the docs
+(`0.3.22`) publish no image of their own, and `0.3.20` was never published, so
+`latest` and `0.3.21` are the same image today. Check the
+[tag list on Docker Hub](https://hub.docker.com/r/elitekaycy/mt5-gateway-api/tags)
+before pinning a newer number.
 
 Run headless against a broker account:
 
@@ -35,7 +41,7 @@ curl http://localhost:5001/health/live
 # {"ok": true, "status": "alive"}
 
 curl -H "Authorization: Bearer $API_KEY" http://localhost:5001/health/ready
-# {"ok": true, "status": "ready", "mt5_status": "connected"}
+# {"ok": true, "status": "ready", "mt5_status": "connected", "kill_switch_active": false}
 
 curl -H "Authorization: Bearer $API_KEY" http://localhost:5001/account
 # expect your login/server plus "trade_allowed": true and "trade_expert": true
@@ -46,6 +52,9 @@ Swagger/OpenAPI UI is available at `http://localhost:5001/apidocs`. If
 `Bearer change-this-long-random-token`.
 
 ## With Docker Compose
+
+From a clone of the repository (its `docker-compose.yml` builds the image from the
+`Dockerfile`; it does not pull the published one):
 
 ```bash
 cp .env.example .env      # then edit it — see Configuration

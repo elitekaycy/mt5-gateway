@@ -36,9 +36,13 @@ Every source's candidates are combined into one ordered, de-duplicated list.
 
 For each candidate address, the boot script writes an MT5 startup config
 (`start.ini`) with `Server=<host:port>` and your credentials, launches
-`terminal64.exe /config:C:\start.ini`, and watches the terminal's own log
-files for an `"Authorized on"` line. The first candidate gets a longer
-window (terminal cold-start + compile); later ones get less. If a candidate
+`terminal64.exe /config:C:\start.ini`, and watches for the account to authorize: either a new `"Authorized on"` line in the
+terminal's log files, or the session marker `/tmp/mt5-api-session` that the API
+writes once it is attached to a logged-in terminal. The marker matters on terminal
+build 6230, where the first login can land late and the journal line later still;
+the loop never kills a terminal the API is attached to (0.3.18). The first candidate gets a longer
+window (terminal cold-start + compile, `MT5_LOGIN_FIRST_TRIES` x 5 s, default 180 s);
+later ones get less (`MT5_LOGIN_TRIES` x 5 s, default 90 s). If a candidate
 doesn't authorize within its window, the terminal is killed by name and the
 next candidate is tried.
 

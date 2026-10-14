@@ -22,7 +22,7 @@ network) so qkt can reach the gateway by service name:
 ```yaml
 services:
   mt5-gateway:
-    image: elitekaycy/mt5-gateway-api:0.3.10
+    image: elitekaycy/mt5-gateway-api:0.3.21
     restart: unless-stopped
     environment:
       MT5_LOGIN: ${MT5_LOGIN}

@@ -5,7 +5,7 @@ Pull the published image:
 ```bash
 docker pull elitekaycy/mt5-gateway-api:latest
 # or pin a release:
-docker pull elitekaycy/mt5-gateway-api:0.3.10
+docker pull elitekaycy/mt5-gateway-api:0.3.21
 ```
 
 Run headless against a broker account:

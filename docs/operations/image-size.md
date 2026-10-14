@@ -5,7 +5,8 @@ and the Wine prefix includes Windows Python, the MetaTrader5 Python package,
 and the MT5 terminal itself, so a fresh volume boots quickly.
 
 On the published `0.3.1` image, an audit showed the following breakdown.
-The image has moved to `0.3.10` since, and this hasn't been re-measured —
+The image has moved on to `0.3.21` since (Docker Hub lists about 3.1 GB of compressed
+layers for it), and the rest hasn't been re-measured —
 treat these as indicative, not exact, until someone re-runs the audit
 against the current tag.
 

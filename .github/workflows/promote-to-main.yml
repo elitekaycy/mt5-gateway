@@ -124,3 +124,5 @@ jobs:
           # GITHUB_TOKEN merges do not trigger push workflows, so dispatch the
           # image build explicitly.
           gh workflow run docker.yml --ref main
+          # The same applies to the docs: nothing else rebuilds them when main moves.
+          gh workflow run docs.yml --ref main

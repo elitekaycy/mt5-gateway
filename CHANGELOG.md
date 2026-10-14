@@ -4,6 +4,13 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.22] - 2026-10-14
+
+### Documentation
+
+- The docs now live at mt5.tryqkt.com, and the README and docs site point there. The
+  old mt5.elitekaycy.com address no longer serves them. No code changes.
+
 ## [0.3.21] - 2026-10-12
 
 ### Security

@@ -4,6 +4,14 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.23] - 2026-10-14
+
+### Documentation
+
+- The docs site is brought up to date with the code: image tags, every environment variable and
+  default, the full route table, the kill-switch and readiness behaviour, and the current qkt
+  connection profile. The landing page shows the mt5-gateway logo. No code changes.
+
 ## [0.3.22] - 2026-10-14
 
 ### Documentation

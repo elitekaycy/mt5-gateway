@@ -1,16 +1,17 @@
 # Configuration
 
-## Core — required for headless login
+## Core — headless login and API key
 
-Without these four, the gateway starts but stays logged out until you log in
-by hand over VNC on `:3000`.
+Without `MT5_LOGIN`, `MT5_PASSWORD` and `MT5_SERVER`, the gateway starts but stays
+logged out until you log in by hand over VNC on `:3000`. `MT5_LOGIN` set with an empty
+`MT5_SERVER` or `MT5_PASSWORD` is logged as an invalid env-login config.
 
 | Var | Meaning |
 |---|---|
 | `MT5_LOGIN` | Broker account number. |
 | `MT5_PASSWORD` | Trading password for that account. |
 | `MT5_SERVER` | Broker server name (e.g. `Exness-MT5Trial9`), not an IP or file. |
-| `API_KEY` | Bearer token required by API operations except `/health/live`. Swagger UI/spec assets stay readable without it so the docs UI can load. |
+| `API_KEY` | Bearer token required by API operations except `/health/live`. Swagger UI/spec assets stay readable without it so the docs UI can load. Not needed for login, but if it is unset the API runs with **no authentication** and logs a warning at start. |
 
 ## Optional — connection & resolution tuning
 
@@ -32,6 +33,17 @@ by hand over VNC on `:3000`.
 | `MT5_LOGIN_FIRST_TRIES` | `36` | Boot login loop: 5-second polls for authorization on the first connect candidate. |
 | `MT5_LOGIN_TRIES` | `18` | Boot login loop: 5-second polls for each later candidate. |
 | `MT5_CONNECTION_VERIFY_TTL_SECONDS` | `30` | How long a verified-connected status is trusted before the next request re-probes MT5 live. |
+| `MT5_FILL_CONFIRM_TIMEOUT_MS` | `3000` | How long a market order, or a close whose acknowledgement carries price `0` or no deal (dealer-desk servers), waits for the executed deal in history before answering. |
+| `MT5_FILL_CONFIRM_POLL_MS` | `200` | Poll interval while waiting for that deal. |
+| `MT5_IDEMPOTENCY_TTL` | `3600` | Seconds an `Idempotency-Key` is remembered for replay. |
+
+A reconnect after a terminal death logs the relaunched terminal in with the
+`MT5_LOGIN` / `MT5_PASSWORD` credentials and the address that authorized at boot. The
+API writes `/tmp/mt5-api-session` once it is attached to a logged-in terminal, and the
+boot login loop counts that as authorized, so a terminal the API is using is never
+killed because its journal line has not landed yet. `MT5_SESSION_MARKER` and
+`MT5_LOGIN_SERVER_FILE` override the paths of the two small files the API and the boot
+script share (`/tmp/mt5-api-session`, `/tmp/mt5-login-server`); you should not need them.
 
 ## Optional — server time & GTD orders
 
@@ -54,6 +66,10 @@ places GTD orders correctly.
 `GET /health` reports the offset in force under `server_time` (`offset_seconds`, `source`,
 `symbol`, `derived_at`, `age_seconds`).
 
+When qkt drives the gateway, qkt does the broker-time to UTC conversion itself and its
+docs tell you to keep `MT5_SERVER_UTC_OFFSET_SECONDS=0` on the gateway; see
+[Using with qkt](../connect/qkt.md).
+
 If no explicit setting and no usable derived offset exist, a GTD order is
 rejected rather than expiring at the wrong time.
 
@@ -65,6 +81,10 @@ rejected rather than expiring at the wrong time.
 | `MAX_ORDER_VOLUME` | `100` | Maximum lot size accepted per order. |
 | `MAX_PRICE_DEVIATION_PCT` | `20` | Maximum allowed deviation between a requested price and the current market price, as a percent. |
 | `MAX_ORDER_DEVIATION` | `1000` | Maximum allowed price deviation in points for the broker-side `deviation` field. |
+
+`POST /order` also rejects any body field outside `symbol`, `volume`, `type`, `price`,
+`stoplimit`, `sl`, `tp`, `deviation`, `magic`, `comment`, `type_filling`, `expiration`
+and `client_order_id`.
 
 ## Optional — request/data limits
 

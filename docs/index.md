@@ -7,6 +7,8 @@ hide:
 
 <section class="mtg-hero" markdown="1">
 
+<img class="mtg-hero__logo" src="assets/mt5-gateway-logo-dark.svg" alt="mt5-gateway" markdown="0">
+
 <div class="mtg-hero__pills" markdown="0">
   <span class="pill pill--accent">MIT licensed</span>
   <span class="pill">Docker Hub</span>

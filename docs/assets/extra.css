@@ -211,3 +211,11 @@
   color: var(--mtg-fg-mute);
   font-size: 0.9rem;
 }
+
+.md-typeset img.mtg-hero__logo {
+  display: block;
+  height: 44px;
+  width: auto;
+  max-width: 100%;
+  margin: 0 0 1.25rem;
+}

@@ -11,6 +11,7 @@
   <a href="https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml"><img src="https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <a href="https://hub.docker.com/r/elitekaycy/mt5-gateway-api"><img src="https://img.shields.io/docker/pulls/elitekaycy/mt5-gateway-api" alt="Docker pulls"></a>
+  <a href="https://github.com/sponsors/elitekaycy"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=github-sponsors&logoColor=white" alt="Sponsor"></a>
 </p>
 
 <p align="center">

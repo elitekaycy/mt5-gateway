@@ -4,6 +4,14 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.24] - 2026-10-20
+
+### Fixed
+
+- A container restarted after its host rebooted no longer stays without a display: an X lock left
+  from the previous boot, whose pid now belongs to another process, is cleared before KasmVNC starts.
+  bot1's hg20k gateway was down two days from this.
+
 ## [0.3.23] - 2026-10-14
 
 ### Documentation

@@ -156,7 +156,10 @@ idempotency keys, a kill switch, and broker-truth reconciliation.</p>
 </section>
 
 <p markdown="0" style="color: var(--mtg-fg-mute); font-size: 0.85rem; margin-top: 3rem;">
-Built on the foundation laid by
-<a href="https://github.com/slowfound">slowfound</a> in
-<a href="https://github.com/slowfound/metatrader5-quant-server-python">metatrader5-quant-server-python</a>.
+Started from
+<a href="https://github.com/slowfound">slowfound</a>'s
+<a href="https://github.com/slowfound/metatrader5-quant-server-python">metatrader5-quant-server-python</a>,
+carried on by <a href="https://github.com/Gabriel-Rockson">Gabriel Rockson</a> in
+<a href="https://github.com/Gabriel-Rockson/mt5-gateway">mt5-gateway</a>,
+and developed here by <a href="https://github.com/elitekaycy">Dickson Anyaele</a>.
 </p>

@@ -112,4 +112,4 @@ interactive API at `http://localhost:5001/apidocs`.
 
 <br/>
 
-<sub>MIT licensed. Built on [slowfound's metatrader5-quant-server-python](https://github.com/slowfound/metatrader5-quant-server-python) and his [tutorial series](https://youtube.com/playlist?list=PLotEOI0Sz3OzdSp7qR6vHs8EYnmQwqWAF).</sub>
+<sub>MIT licensed. Started from [slowfound](https://github.com/slowfound)'s [metatrader5-quant-server-python](https://github.com/slowfound/metatrader5-quant-server-python) and his [tutorial series](https://youtube.com/playlist?list=PLotEOI0Sz3OzdSp7qR6vHs8EYnmQwqWAF), carried on by [Gabriel Rockson](https://github.com/Gabriel-Rockson) in [mt5-gateway](https://github.com/Gabriel-Rockson/mt5-gateway), and developed here by [Dickson Anyaele](https://github.com/elitekaycy).</sub>

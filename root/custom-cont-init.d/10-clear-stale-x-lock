@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Clears X display locks left from before this container start. The base image runs this from
+# /custom-cont-init.d before it starts KasmVNC, when no X server can be running yet.
+#
+# A container restarted with the host keeps its /tmp, so the lock of the previous Xvnc survives. X treats
+# the lock as live while its pid exists, and after a reboot that pid can belong to another process: on
+# bot1 on 2026-10-18 it was nginx, Xvnc refused to start for two days, and with it the terminal and the API.
+set -euo pipefail
+
+tmp="${X_TMP:-/tmp}"
+for lock in "$tmp"/.X*-lock; do
+  [[ -e "$lock" ]] || continue
+  display="${lock#"$tmp"/.X}"
+  display="${display%-lock}"
+  echo "[clear-stale-x-lock] removing lock for display :$display (pid $(tr -d '[:space:]' <"$lock"))"
+  rm -f "$lock" "$tmp/.X11-unix/X$display"
+done

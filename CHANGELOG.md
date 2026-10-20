@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.24] - 2026-10-20
+
 ### Fixed
 
 - A container restarted after its host rebooted no longer stays without a display: an X lock left

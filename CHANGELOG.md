@@ -4,6 +4,14 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.26] - 2026-10-22
+
+### Fixed
+
+- The release build refreshes Debian packages every day instead of every week. 0.3.25 never
+  published an image: its security scan found fixed expat and libssh updates that the week-keyed
+  layer cache had not picked up. 0.3.26 carries everything listed under 0.3.25.
+
 ## [0.3.25] - 2026-10-22
 
 No code changes: the image is the 0.3.24 gateway on a fresh build.

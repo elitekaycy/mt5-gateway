@@ -14,8 +14,10 @@ RUN mkdir -p /config/.wine && \
   chmod -R 755 /config/.wine
 
 # 3. Standard update (Backports removal logic is deleted as it's unnecessary here).
-# OS_PATCH_REV changes weekly in the release build, so the cached layer is never reused with an older
-# week's package versions (a stale cache shipped python3.11 deb12u8 after deb12u9 was out).
+# OS_PATCH_REV changes daily in the release build, so the cached layer is never reused with an older
+# day's package versions: a stale cache shipped python3.11 deb12u8 after deb12u9 was out, and a
+# week-keyed cache failed 0.3.25's scan on expat and libssh fixes released mid-week. Every release
+# reinstalls the MT5 terminal anyway (MT5_LAYER_REV), so the daily key costs no extra rebuild.
 ARG OS_PATCH_REV=0
 RUN echo "os patch rev: ${OS_PATCH_REV}" && apt-get update && apt-get upgrade -y
 

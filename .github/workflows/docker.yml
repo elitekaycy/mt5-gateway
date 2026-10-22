@@ -13,6 +13,14 @@ name: docker
 on:
   push:
     branches: [main]
+    # A docs-only push must not rebuild the image: the build installs the MT5 terminal fresh, so a rebuild
+    # republishes the release tags with whatever terminal build MetaQuotes serves that day.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'mkdocs.yml'
+      - 'requirements-docs.txt'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 concurrency:

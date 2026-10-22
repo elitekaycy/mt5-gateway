@@ -11,6 +11,7 @@
   <a href="https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml"><img src="https://github.com/elitekaycy/mt5-gateway/actions/workflows/check.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
   <a href="https://hub.docker.com/r/elitekaycy/mt5-gateway-api"><img src="https://img.shields.io/docker/pulls/elitekaycy/mt5-gateway-api" alt="Docker pulls"></a>
+  <a href="https://github.com/sponsors/elitekaycy"><img src="https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=github-sponsors&logoColor=white" alt="Sponsor"></a>
 </p>
 
 <p align="center">
@@ -112,4 +113,4 @@ interactive API at `http://localhost:5001/apidocs`.
 
 <br/>
 
-<sub>MIT licensed. Built on [slowfound's metatrader5-quant-server-python](https://github.com/slowfound/metatrader5-quant-server-python) and his [tutorial series](https://youtube.com/playlist?list=PLotEOI0Sz3OzdSp7qR6vHs8EYnmQwqWAF).</sub>
+<sub>MIT licensed. Started from [slowfound](https://github.com/slowfound)'s [metatrader5-quant-server-python](https://github.com/slowfound/metatrader5-quant-server-python) and his [tutorial series](https://youtube.com/playlist?list=PLotEOI0Sz3OzdSp7qR6vHs8EYnmQwqWAF), carried on by [Gabriel Rockson](https://github.com/Gabriel-Rockson) in [mt5-gateway](https://github.com/Gabriel-Rockson/mt5-gateway), and developed here by [Dickson Anyaele](https://github.com/elitekaycy).</sub>

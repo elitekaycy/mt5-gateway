@@ -57,19 +57,32 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-  # Fails the run when the live site is not answering, so a Pages setting that drifts (source branch,
-  # custom domain) is noticed on the next deploy instead of by a visitor.
+  # Fails the run when Pages drifts (source, custom domain) or GitHub stops serving the new site, so it is
+  # noticed on the next deploy instead of by a visitor. It asks GitHub's Pages origin directly: the public
+  # hostname sits behind Cloudflare, whose bot protection answers GitHub's runners with 403.
   verify:
     needs: deploy
     runs-on: ubuntu-latest
+    permissions:
+      pages: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HOST: mt5.tryqkt.com
     steps:
-      - name: Check the live site answers
+      - name: Check the Pages settings
         run: |
-          url=https://mt5.tryqkt.com/
+          read -r build_type cname < <(gh api "repos/${{ github.repository }}/pages" --jq '"\(.build_type) \(.cname)"')
+          if [ "$build_type" != workflow ] || [ "$cname" != "$HOST" ]; then
+            echo "::error::Pages is set to source=$build_type domain=$cname; expected source GitHub Actions and domain $HOST (Settings > Pages)"
+            exit 1
+          fi
+
+      - name: Check GitHub serves the site
+        run: |
           for _ in $(seq 1 8); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "$url" || true)
-            [ "$code" = 200 ] && exit 0
+            code=$(curl -s -o page.html -w "%{http_code}" -H "Host: $HOST" http://185.199.108.153/ || true)
+            [ "$code" = 200 ] && grep -q "mt5-gateway" page.html && exit 0
             sleep 15
           done
-          echo "::error::$url answered ${code:-nothing} after the deploy: check Settings > Pages (source GitHub Actions, custom domain)"
+          echo "::error::GitHub Pages answered ${code:-nothing} for $HOST after the deploy"
           exit 1

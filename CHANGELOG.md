@@ -4,6 +4,22 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.25] - 2026-10-22
+
+No code changes: the image is the 0.3.24 gateway on a fresh build.
+
+### Changed
+
+- A push to main that touches only docs no longer rebuilds the image. The build installs the MT5
+  terminal fresh, so a docs-only rebuild republished the release tags with whatever terminal build
+  MetaQuotes served that day.
+- The docs deploy check verifies against GitHub Pages directly, not through Cloudflare's cache.
+
+### Documentation
+
+- Credit for the project's origins: slowfound, then Gabriel Rockson, then this fork.
+- A GitHub Sponsors link in the README.
+
 ## [0.3.24] - 2026-10-20
 
 ### Fixed

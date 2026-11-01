@@ -99,8 +99,7 @@ Still baked into the image (~728 KB, major brokers) as an offline fallback for
 name-based login, but it is **no longer required** for headless login — the resolver
 covers brokers it doesn't list, and MT5 self-seeds the directory on first connect.
 
-Override without rebuilding: mount your own at `/defaults/servers.dat`, or set
-`QKT_ARTIFACTS_TOKEN` to fetch it from a private repo on first boot.
+Override without rebuilding: mount your own at `/defaults/servers.dat`.
 
 ## Verify
 

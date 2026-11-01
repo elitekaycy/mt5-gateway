@@ -42,6 +42,9 @@ try a newer build, build with an empty `MT5_TERMINAL_SOURCE` and let that check 
 docker build -f Dockerfile.headless --build-arg MT5_TERMINAL_SOURCE= -t mt5-gateway:try .
 ```
 
+Wine 11 does not help yet: build 6244 starts under it, but the installer for the newest build
+hung for all three attempts.
+
 `MT5_SETUP_URL` at runtime installs whatever build that URL serves, so it can hit this too.
 
 ## What was removed

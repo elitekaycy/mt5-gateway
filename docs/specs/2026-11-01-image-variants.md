@@ -48,12 +48,9 @@ use; the start check decides whether it does.
 ## Testing
 
 `tests/test_image_variants.py` pins what must stay equal between the images and covers the
-bake functions. `scripts/test-image-variant.py` boots a real image against a demo account:
-login, market data, an order round trip, restart, terminal and API crashes, secrets, and
-graceful stop. It refuses to trade unless the broker reports a demo account.
-
-Run it for fresh volumes on both images, a volume moved between them, a rollback to the
-previous image, and a copy of a volume from a real deployment.
+bake functions. `attestation/run.py` drives a real image against a demo account, and a
+promotion to `main` requires its record for the exact source. See
+[MT5 attestation](../contributing/attestation.md).
 
 ## Fixes found by that testing
 

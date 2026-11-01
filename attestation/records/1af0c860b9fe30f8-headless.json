@@ -1,0 +1,258 @@
+{
+  "attested_at": "2026-11-01T11:46:31+00:00",
+  "cases": {
+    "api_calculators_and_order_check": {
+      "detail": {
+        "checked": 3
+      },
+      "ok": true,
+      "seconds": 0
+    },
+    "api_close_all_only_touches_its_magic": {
+      "detail": {
+        "kept_other_magic": true
+      },
+      "ok": true,
+      "seconds": 6
+    },
+    "api_closing_a_missing_position_fails_cleanly": {
+      "detail": {
+        "clean": 3
+      },
+      "ok": true,
+      "seconds": 0
+    },
+    "api_concurrent_orders_each_open_one": {
+      "detail": {
+        "orders": 6
+      },
+      "ok": true,
+      "seconds": 19
+    },
+    "api_concurrent_reads_all_answer": {
+      "detail": {
+        "reads": 40
+      },
+      "ok": true,
+      "seconds": 0
+    },
+    "api_every_read_route": {
+      "detail": {
+        "bars": 50
+      },
+      "ok": true,
+      "seconds": 5
+    },
+    "api_fill_reply_reports_the_real_price": {
+      "detail": {
+        "fill_price_source": "order_send"
+      },
+      "ok": true,
+      "seconds": 3
+    },
+    "api_history_finds_the_trade": {
+      "detail": {
+        "deals": 2
+      },
+      "ok": true,
+      "seconds": 4
+    },
+    "api_idempotency_replays_and_refuses": {
+      "detail": {
+        "positions": 1
+      },
+      "ok": true,
+      "seconds": 5
+    },
+    "api_invalid_orders_open_nothing": {
+      "detail": {
+        "rejected": 9
+      },
+      "ok": true,
+      "seconds": 3
+    },
+    "api_market_buy_and_sell": {
+      "detail": {
+        "sides": 2
+      },
+      "ok": true,
+      "seconds": 13
+    },
+    "api_partial_close": {
+      "detail": {
+        "remaining": 0.01
+      },
+      "ok": true,
+      "seconds": 4
+    },
+    "api_pending_lifecycle": {
+      "detail": {
+        "kinds": 4
+      },
+      "ok": true,
+      "seconds": 15
+    },
+    "api_sl_tp_set_and_modified": {
+      "detail": {
+        "tp_preserved": true
+      },
+      "ok": true,
+      "seconds": 4
+    },
+    "boot_algo_trading_off": {
+      "detail": {
+        "reply": 400
+      },
+      "ok": true,
+      "seconds": 18
+    },
+    "boot_fresh_three_vars_no_servers_dat": {
+      "detail": {
+        "boots": 5,
+        "ready_seconds": [
+          16,
+          14,
+          16,
+          12,
+          12
+        ]
+      },
+      "ok": true,
+      "seconds": 189
+    },
+    "boot_name_only_login": {
+      "detail": {
+        "ready_seconds": 12
+      },
+      "ok": true,
+      "seconds": 16
+    },
+    "boot_network_cut_during_login": {
+      "detail": {
+        "session_seconds": 3
+      },
+      "ok": true,
+      "seconds": 73
+    },
+    "boot_resolver_service_only": {
+      "detail": {
+        "ready_seconds": 12
+      },
+      "ok": true,
+      "seconds": 16
+    },
+    "boot_restart_soon_after_login": {
+      "detail": {
+        "ready_seconds": [
+          8,
+          8,
+          8,
+          8,
+          8
+        ]
+      },
+      "ok": true,
+      "seconds": 175
+    },
+    "boot_table_only_no_resolver_service": {
+      "detail": {
+        "ready_seconds": 12
+      },
+      "ok": true,
+      "seconds": 16
+    },
+    "boot_with_baked_servers_dat": {
+      "detail": {
+        "ready_seconds": 12
+      },
+      "ok": true,
+      "seconds": 16
+    },
+    "boot_wrong_password_never_logs_in": {
+      "detail": {
+        "order_status": 503
+      },
+      "ok": true,
+      "seconds": 165
+    },
+    "recovery_api_crash": {
+      "detail": {
+        "seconds": 11
+      },
+      "ok": true,
+      "seconds": 19
+    },
+    "recovery_network_loss": {
+      "detail": {
+        "seconds": 0
+      },
+      "ok": true,
+      "seconds": 74
+    },
+    "recovery_restart": {
+      "detail": {
+        "seconds": 12
+      },
+      "ok": true,
+      "seconds": 14
+    },
+    "recovery_stop_is_graceful": {
+      "detail": {
+        "seconds": 3
+      },
+      "ok": true,
+      "seconds": 12
+    },
+    "recovery_terminal_crash": {
+      "detail": {
+        "seconds": 12
+      },
+      "ok": true,
+      "seconds": 20
+    },
+    "security_api_key": {
+      "detail": {
+        "rejected": 2
+      },
+      "ok": true,
+      "seconds": 30
+    },
+    "security_kill_switch": {
+      "detail": {
+        "blocked": 423
+      },
+      "ok": true,
+      "seconds": 19
+    },
+    "security_no_secret_left_behind": {
+      "detail": {
+        "clean": true
+      },
+      "ok": true,
+      "seconds": 23
+    },
+    "surface_processes": {
+      "detail": {},
+      "ok": true,
+      "seconds": 0
+    },
+    "surface_terminal_did_not_change": {
+      "detail": {
+        "baked": "5.0.0.6244",
+        "running": "5.0.0.6244"
+      },
+      "ok": true,
+      "seconds": 0
+    }
+  },
+  "fingerprint": "1af0c860b9fe30f8",
+  "image_id": "sha256:b2dbd8604b9d4358120a7c0d2de4281c55de7acf4e4011d4a11edd74b0fff5e1",
+  "server": "Exness-MT5Trial9",
+  "unclear_replies": {
+    "close_executed": 0,
+    "close_not_executed": 1,
+    "order_executed": 1,
+    "order_not_executed": 2
+  },
+  "variant": "headless"
+}

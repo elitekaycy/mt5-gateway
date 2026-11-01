@@ -55,8 +55,15 @@ graceful stop. It refuses to trade unless the broker reports a demo account.
 Run it for fresh volumes on both images, a volume moved between them, a rollback to the
 previous image, and a copy of a volume from a real deployment.
 
-## Known gaps, not caused by this change
+## Fixes found by that testing
 
-- After a terminal crash the API relaunches a terminal with no `start.ini`, so reads work
-  but orders fail with 10027 until the container restarts. The previous image does the same.
-- A terminal that auto-updates to an affected build would stop on its next start.
+- `10031` is ambiguous, not retryable: deal history showed closes answered with it executing
+  within 200 ms, and others not executing. qkt already treats 409 and 5xx as ambiguous.
+- The boot writes the algo-trading switch to `Config/common.ini`, so a terminal relaunched
+  after a crash can trade instead of rejecting orders with 10027. `Account` is now always 0:
+  MT5 documents 1 as "disable when connecting with a different account", which also caught a
+  first login made through the API after a boot-time outage.
+
+## Known gap
+
+A terminal that auto-updates to an affected build would stop on its next start.

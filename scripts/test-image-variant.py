@@ -27,6 +27,7 @@ DEMO_TRADE_MODE = 0
 READY_TIMEOUT_S = 600
 RECOVERY_TIMEOUT_S = 300
 TRANSIENT_RETRY_S = 120
+RECONCILE_S = 8
 
 
 class Check(Exception):
@@ -57,6 +58,7 @@ class Gateway:
         self.env = env
         self.name = f"mt5-variant-test-{uuid.uuid4().hex[:8]}"
         self.base = f"http://127.0.0.1:{args.port}"
+        self.trade_log: list[dict[str, Any]] = []
 
     def start(self) -> None:
         docker(
@@ -72,6 +74,16 @@ class Gateway:
         return docker("exec", self.name, *cmd, check=check)
 
     def request(
+        self, method: str, path: str, body: dict[str, Any] | None = None
+    ) -> tuple[int, Any]:
+        status, reply = self._request(method, path, body)
+        if method == "POST":
+            self.trade_log.append(
+                {"at": time.time(), "path": path, "status": status, "reply": reply}
+            )
+        return status, reply
+
+    def _request(
         self, method: str, path: str, body: dict[str, Any] | None = None
     ) -> tuple[int, Any]:
         headers = {"Content-Type": "application/json"}
@@ -173,48 +185,74 @@ def _positions(gw: Gateway, magic: int) -> list[dict[str, Any]]:
     return [row for row in rows if row.get("magic") == magic]
 
 
-def _send_retrying(gw: Gateway, path: str, body: dict[str, Any]) -> tuple[int, Any]:
-    """Posts until not rejected as retryable (MT5 10031 is common just after login)."""
-    deadline = time.monotonic() + TRANSIENT_RETRY_S
-    while True:
-        status, reply = gw.request("POST", path, body)
-        retryable = isinstance(reply, dict) and reply.get("error_type") == "retryable"
-        if not retryable or time.monotonic() > deadline:
-            return status, reply
-        time.sleep(5)
+def _is_transient(reply: Any) -> bool:
+    return isinstance(reply, dict) and reply.get("error_type") in (
+        "retryable",
+        "unknown_outcome",
+    )
+
+
+def _settled(gw: Gateway, seconds: int, done: Any) -> bool:
+    """Broker truth decides what an unclear reply meant, e.g. 10031 can still execute."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if done():
+            return True
+        time.sleep(1)
+    return bool(done())
 
 
 def _send_order(
     gw: Gateway, order: dict[str, Any], evidence: dict[str, Any]
 ) -> tuple[int, Any]:
-    """Sends an order, consulting broker truth before any retry.
-
-    A retryable reply should mean nothing reached the market. A run on 2026-11-01 ended
-    with two positions after a retry, so this records any reply the broker contradicts
-    instead of opening another position.
-    """
+    """Sends an order, reconciling before any retry so it cannot open two positions."""
+    magic = order["magic"]
+    opened = lambda: _positions(gw, magic)  # noqa: E731
     deadline = time.monotonic() + TRANSIENT_RETRY_S
     while True:
         status, reply = gw.request("POST", "/order", order)
-        if not (isinstance(reply, dict) and reply.get("error_type") == "retryable"):
+        if not _is_transient(reply):
             return status, reply
-        rejected = reply.get("mt5_error", {})
-        evidence.setdefault("order_retryable_replies", []).append(
-            rejected.get("retcode")
-        )
-        time.sleep(5)
-        if _positions(gw, order["magic"]):
-            evidence.setdefault("retryable_reply_but_filled", []).append(rejected)
+        if _settled(gw, RECONCILE_S, opened):
+            evidence["unclear_order_executed"] = (
+                evidence.get("unclear_order_executed", 0) + 1
+            )
             return 200, reply
+        evidence["unclear_order_not_executed"] = (
+            evidence.get("unclear_order_not_executed", 0) + 1
+        )
+        if time.monotonic() > deadline:
+            return status, reply
+        order = {**order, "client_order_id": uuid.uuid4().hex}
+
+
+def _close(
+    gw: Gateway, magic: int, ticket: int, evidence: dict[str, Any]
+) -> tuple[int, Any]:
+    """Closes a position, reconciling before any retry."""
+    deadline = time.monotonic() + TRANSIENT_RETRY_S
+    gone = lambda: not any(p["ticket"] == ticket for p in _positions(gw, magic))  # noqa: E731
+    while True:
+        status, reply = gw.request(
+            "POST", "/close_position", {"position": {"ticket": ticket}}
+        )
+        if not _is_transient(reply):
+            return status, reply
+        if _settled(gw, RECONCILE_S, gone):
+            evidence["unclear_close_executed"] = (
+                evidence.get("unclear_close_executed", 0) + 1
+            )
+            return 200, reply
+        evidence["unclear_close_not_executed"] = (
+            evidence.get("unclear_close_not_executed", 0) + 1
+        )
         if time.monotonic() > deadline:
             return status, reply
 
 
 def _flatten(gw: Gateway, magic: int) -> None:
     for position in _positions(gw, magic):
-        _send_retrying(
-            gw, "/close_position", {"position": {"ticket": position["ticket"]}}
-        )
+        _close(gw, magic, position["ticket"], {})
 
 
 def check_trade_round_trip(gw: Gateway, evidence: dict[str, Any]) -> None:
@@ -241,9 +279,7 @@ def check_trade_round_trip(gw: Gateway, evidence: dict[str, Any]) -> None:
         if len(positions) != 1 or float(positions[0]["volume"]) != gw.args.lots:
             raise Check(f"expected one {gw.args.lots} position, got {positions}")
         ticket = positions[0]["ticket"]
-        status, closed = _send_retrying(
-            gw, "/close_position", {"position": {"ticket": ticket}}
-        )
+        status, closed = _close(gw, magic, ticket, evidence)
         if status != 200:
             raise Check(f"/close_position returned {status}: {closed}")
         time.sleep(2)
@@ -272,12 +308,10 @@ def check_terminal_crash(gw: Gateway, evidence: dict[str, Any]) -> None:
     evidence["terminal_crash_recovery_seconds"] = round(time.monotonic() - started)
 
 
-def record_trading_after_terminal_crash(gw: Gateway, evidence: dict[str, Any]) -> None:
-    """Records a known gap rather than failing on it.
-
-    The terminal the API relaunches has no start.ini, so MT5 rejects orders with 10027
-    until the next container restart. Unmodified images behave the same.
-    """
+def record_trading_gap_after_terminal_crash(
+    gw: Gateway, evidence: dict[str, Any]
+) -> None:
+    """For images older than the fix: they reject orders with 10027 here. Records it."""
     magic = 700000 + int(time.time()) % 99999
     order = {
         "symbol": gw.args.symbol,
@@ -373,6 +407,12 @@ def main() -> int:
         "--keep-going", action="store_true", help="run later checks after a failure"
     )
     parser.add_argument("--no-crash-checks", action="store_true")
+    parser.add_argument(
+        "--older-image", action="store_true", help="the image predates the 10027 fix"
+    )
+    parser.add_argument(
+        "--trade-rounds", type=int, default=1, help="order round trips right after boot"
+    )
     args = parser.parse_args()
     # A timeout or Ctrl-C must still run the cleanup below.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
@@ -389,14 +429,16 @@ def main() -> int:
         check_boot,
         check_variant_surface,
         check_market_data,
-        check_trade_round_trip,
+        *[check_trade_round_trip] * args.trade_rounds,
         check_no_secret_on_disk_or_logs,
     ]
     if not args.no_crash_checks:
         checks += [
             check_restart,
             check_terminal_crash,
-            record_trading_after_terminal_crash,
+            record_trading_gap_after_terminal_crash
+            if args.older_image
+            else check_trade_round_trip,
         ]
         if args.variant == "headless":
             checks.append(check_api_crash)
@@ -416,6 +458,14 @@ def main() -> int:
                 if not args.keep_going:
                     break
     finally:
+        if args.evidence:
+            full = subprocess.run(
+                ["docker", "logs", gw.name], capture_output=True, text=True
+            )
+            scrubbed = (full.stdout + full.stderr).replace(
+                env.get("MT5_PASSWORD", "\0"), "***"
+            )
+            args.evidence.with_suffix(".container.log").write_text(scrubbed)
         if failures:
             tail = subprocess.run(
                 ["docker", "logs", "--tail", "25", gw.name],
@@ -431,6 +481,7 @@ def main() -> int:
         if temporary:
             docker("volume", "rm", temporary, check=False)
     evidence["failures"] = failures
+    evidence["trade_log"] = gw.trade_log
     print(json.dumps(evidence, indent=2))
     if args.evidence:
         args.evidence.write_text(json.dumps(evidence, indent=2))

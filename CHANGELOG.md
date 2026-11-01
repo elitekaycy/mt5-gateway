@@ -19,6 +19,12 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Fresh volumes work again. Images from at least 0.3.24 baked MT5 builds that stop under
   Wine 10 with a false debugger dialog.
 - The build now fails if the baked terminal cannot start.
+- MT5 `10031` now returns `502 unknown_outcome` instead of `409 retryable`. The broker's deal
+  history showed requests answered with it executing anyway, so retrying could send an order
+  twice. Repeating the same idempotency key now replays the reply instead of sending again.
+- A terminal that comes back after a crash or a boot-time outage can trade. It used to reject
+  orders with `10027` until the container restarted. The start config set MT5's `Account=1`,
+  which means "disable algo trading when connecting with a different account".
 
 ## [0.3.26] - 2026-10-22
 

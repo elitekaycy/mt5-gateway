@@ -4,6 +4,22 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- A headless image (`headless`, `X.Y.Z-headless`) with no browser desktop. It uses the same
+  API and `/config` volume as the VNC image, and restarts the API if it crashes.
+
+### Changed
+
+- The VNC image is much smaller, and keeps its tags and desktop.
+- Both images bake MT5 build 6244, pinned, rather than the newest build.
+
+### Fixed
+
+- Fresh volumes work again. Images from at least 0.3.24 baked MT5 builds that stop under
+  Wine 10 with a false debugger dialog.
+- The build now fails if the baked terminal cannot start.
+
 ## [0.3.26] - 2026-10-22
 
 ### Fixed

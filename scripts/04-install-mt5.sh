@@ -112,6 +112,12 @@ if [ -n "${MT5_LOGIN:-}" ]; then
             fi
         fi
     fi
+    # A terminal the API relaunches after a crash gets no start.ini, so it reads the
+    # algo-trading switch from here.
+    python3 -c "import sys, os; from pathlib import Path; sys.path.insert(0, '/app'); \
+from autologin import load_settings, persist_algo_trading; \
+persist_algo_trading(Path(sys.argv[1]), load_settings(os.environ).enable_algo_trading)" \
+        "$mt5cfg/common.ini"
     # Build the ordered connect-candidate list — baked table, then resolver
     # services, then the server name — and try each until MT5 authorizes, so a
     # stale address or an unknown broker falls through automatically. Runs in the

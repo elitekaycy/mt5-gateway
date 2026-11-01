@@ -9,6 +9,7 @@ from autologin import (
     AutoLoginSettings,
     authorization_count,
     load_settings,
+    persist_algo_trading,
     render_start_ini,
     validate,
 )
@@ -59,7 +60,7 @@ def test_render_start_ini_has_login_block_and_autotrading():
     assert "[Experts]" in ini
     assert "AllowLiveTrading=1" in ini
     assert "Enabled=1" in ini
-    assert "Account=1" in ini
+    assert "Account=0" in ini
 
 
 @pytest.mark.parametrize("raw", ["0", "false", "False", "no", "off", "disabled"])
@@ -157,3 +158,77 @@ def test_wine_path_maps_tmp_through_drive_z():
 
     assert wine_path("/tmp/mt5-api-session", nt=False) == "/tmp/mt5-api-session"
     assert wine_path("/tmp/mt5-api-session", nt=True) == r"Z:\tmp\mt5-api-session"
+
+
+def _read_ini(path):
+    return path.read_bytes().decode("utf-16")
+
+
+def test_persist_algo_trading_keeps_the_terminals_utf16_format_and_other_settings(
+    tmp_path,
+):
+    ini = tmp_path / "common.ini"
+    ini.write_bytes(
+        "[Common]\r\nEnvironment=ABC\r\n[Charts]\r\nMaxBars=100000\r\n".encode("utf-16")
+    )
+
+    persist_algo_trading(ini, True)
+
+    assert ini.read_bytes()[:2] == b"\xff\xfe"
+    text = _read_ini(ini)
+    assert "Environment=ABC\r\n" in text
+    assert "MaxBars=100000\r\n" in text
+    assert "[Experts]\r\nAllowLiveTrading=1\r\nEnabled=1\r\nAccount=0\r\n" in text
+
+
+def test_persist_algo_trading_replaces_old_values_and_keeps_other_expert_keys(tmp_path):
+    ini = tmp_path / "common.ini"
+    ini.write_bytes(
+        "[Experts]\r\nEnabled=0\r\nAllowDllImport=1\r\n[Charts]\r\nMaxBars=5\r\n".encode(
+            "utf-16"
+        )
+    )
+
+    persist_algo_trading(ini, True)
+
+    text = _read_ini(ini)
+    assert text.count("[Experts]") == 1
+    assert "Enabled=0" not in text
+    assert "AllowDllImport=1" in text
+    assert "MaxBars=5" in text
+
+
+def test_persist_algo_trading_honours_the_operators_off_switch(tmp_path):
+    ini = tmp_path / "common.ini"
+
+    persist_algo_trading(ini, False)
+
+    text = _read_ini(ini)
+    assert "AllowLiveTrading=0" in text
+    assert "Enabled=0" in text
+    assert "Account=0" in text
+
+
+def test_persist_algo_trading_is_stable_when_repeated_on_every_boot(tmp_path):
+    ini = tmp_path / "common.ini"
+    persist_algo_trading(ini, True)
+    once = ini.read_bytes()
+
+    persist_algo_trading(ini, True)
+
+    assert ini.read_bytes() == once
+
+
+def test_a_first_login_must_not_count_as_an_account_change():
+    # 2026-11-01: after a boot-time outage the API logged the terminal in, and with
+    # Account=1 every order was rejected with 10027.
+    for enabled in ("1", "0"):
+        settings = load_settings(
+            {
+                "MT5_LOGIN": "1",
+                "MT5_PASSWORD": "x",
+                "MT5_SERVER": "s",
+                "MT5_ENABLE_ALGO_TRADING": enabled,
+            }
+        )
+        assert "Account=0" in render_start_ini(settings)

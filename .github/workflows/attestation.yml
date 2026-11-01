@@ -1,0 +1,77 @@
+name: attestation
+
+# Runs the real-broker attestation on both images: real logins and real demo orders.
+# Started by hand, and weekly to catch outside changes such as a new MT5 build. Never on a
+# pull request: this repo is public, and a PR must not be able to reach these secrets.
+#
+# It needs MT5_ATTEST_LOGIN, MT5_ATTEST_PASSWORD and MT5_ATTEST_SERVER for a demo account used
+# by nothing else, because its cases count positions and restart logins. The run itself refuses
+# to trade on anything but a demo account.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mt5-attestation
+  cancel-in-progress: false
+
+jobs:
+  attest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      # One demo account, so one image at a time.
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        include:
+          - variant: headless
+            dockerfile: Dockerfile.headless
+          - variant: vnc
+            dockerfile: Dockerfile
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Require the demo account secrets
+        env:
+          MT5_LOGIN: ${{ secrets.MT5_ATTEST_LOGIN }}
+          MT5_PASSWORD: ${{ secrets.MT5_ATTEST_PASSWORD }}
+          MT5_SERVER: ${{ secrets.MT5_ATTEST_SERVER }}
+        run: |
+          if [ -z "$MT5_LOGIN" ] || [ -z "$MT5_PASSWORD" ] || [ -z "$MT5_SERVER" ]; then
+            echo "::error::Set MT5_ATTEST_LOGIN, MT5_ATTEST_PASSWORD and MT5_ATTEST_SERVER. See docs/contributing/attestation.md"
+            exit 1
+          fi
+          umask 077
+          printf 'MT5_LOGIN=%s\nMT5_PASSWORD=%s\nMT5_SERVER=%s\n' "$MT5_LOGIN" "$MT5_PASSWORD" "$MT5_SERVER" > "$RUNNER_TEMP/demo.env"
+
+      - name: Free disk space for the Wine image build
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build the image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          load: true
+          push: false
+          tags: mt5-gateway:attest
+          cache-from: type=gha,scope=${{ matrix.variant == 'vnc' && 'mt5-gateway' || 'mt5-gateway-headless' }}
+
+      - name: Attest
+        run: |
+          attestation/run.py --image mt5-gateway:attest --variant "${{ matrix.variant }}" \
+            --env-file "$RUNNER_TEMP/demo.env" --symbol "${{ vars.MT5_ATTEST_SYMBOL || 'BTCUSDm' }}"
+
+      - name: Remove the credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/demo.env"

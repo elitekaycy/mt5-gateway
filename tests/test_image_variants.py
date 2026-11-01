@@ -288,3 +288,11 @@ def test_a_release_publishes_the_plain_tags_only_from_the_vnc_image():
     )
     assert "dockerfile: Dockerfile.headless\n            suffix: -headless" in workflow
     assert "floating_tag: headless" in workflow
+
+
+def test_the_api_waits_for_the_boot_terminal():
+    # 2026-11-01: a fast restart let the API launch a terminal with no start.ini first.
+    start = (ROOT / "scripts" / "01-start.sh").read_text()
+    wait = start.index("terminal64")
+    assert start.index("04-install-mt5.sh") < wait < start.index("05-install-python.sh")
+    assert wait < start.index("waitress")

@@ -143,6 +143,27 @@ def test_none_outcome_is_ambiguous_and_replayed(client, monkeypatch):
     assert len(calls) == 1
 
 
+def test_no_connection_reply_is_replayed_instead_of_sent_twice(client, monkeypatch):
+    # 2026-11-01: broker deal history showed requests answered with 10031 executing.
+    calls = []
+
+    def order_send(request):
+        calls.append(request)
+        return OrderResult(10031, "no connection", 0, 0, 0, 0, 0, 0)
+
+    monkeypatch.setattr(order_route.mt5, "order_send", order_send, raising=False)
+    payload = {"symbol": "EURUSD", "volume": 0.1, "type": "BUY"}
+    headers = {"Idempotency-Key": "no-connection-order"}
+
+    first = client.post("/order", json=payload, headers=headers)
+    second = client.post("/order", json=payload, headers=headers)
+
+    assert first.status_code == 502
+    assert first.get_json()["error_type"] == "unknown_outcome"
+    assert second.status_code == 502
+    assert len(calls) == 1
+
+
 def test_stop_limit_order_accepts_and_forwards_stoplimit(client, monkeypatch):
     calls = []
     monkeypatch.setattr(

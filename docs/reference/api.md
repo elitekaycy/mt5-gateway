@@ -78,7 +78,8 @@ Send a stable `Idempotency-Key` header (or a matching `client_order_id` body
 field) with every trade request. Repeating the same key and request replays
 the original response without placing another order. Reusing a key with
 different parameters returns `409`. A `502 unknown_outcome` means the broker
-may have accepted the request — reconcile positions and order/deal history
+may have accepted the request, including MT5's `10031` "no connection" reply, which
+can still execute — reconcile positions and order/deal history
 (`GET /reconcile`) before retrying.
 
 ## Modifying stop-loss / take-profit

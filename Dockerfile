@@ -1,3 +1,8 @@
+# The terminal both images bake. The MetaQuotes installer only serves the newest build, and
+# builds from 6274 on stop under Wine 10 with a false "debugger has been found" dialog (see
+# docs/operations/image-size.md), so this takes build 6244 from a published image of ours.
+FROM elitekaycy/mt5-gateway-api:0.3.19@sha256:28042a654f344edab30c7ef664e0b2f19e59134fb21c300e000809c0d93a37d1 AS terminal-source
+
 # 1. Update the base image to the Bookworm tag
 FROM ghcr.io/linuxserver/baseimage-kasmvnc:debianbookworm@sha256:c6129530811450448ab760064b27e111fb3351fc3222af652f605a48eb518ed7 AS base
 
@@ -13,29 +18,26 @@ RUN mkdir -p /config/.wine && \
   chown -R abc:abc /config/.wine && \
   chmod -R 755 /config/.wine
 
-# 3. Standard update (Backports removal logic is deleted as it's unnecessary here).
-# OS_PATCH_REV changes daily in the release build, so the cached layer is never reused with an older
-# day's package versions: a stale cache shipped python3.11 deb12u8 after deb12u9 was out, and a
-# week-keyed cache failed 0.3.25's scan on expat and libssh fixes released mid-week. Every release
+# 3. Patch, install and clean in one stage, flattened below so that files replaced
+# or deleted here stop costing image size. OS_PATCH_REV changes daily in the release
+# build, so the cached layer is never reused with an older day's package versions: a
+# stale cache shipped python3.11 deb12u8 after deb12u9 was out, and a week-keyed cache
+# failed 0.3.25's scan on expat and libssh fixes released mid-week. Every release
 # reinstalls the MT5 terminal anyway (MT5_LAYER_REV), so the daily key costs no extra rebuild.
 ARG OS_PATCH_REV=0
+ARG WINE_LAYER_REV=1
 RUN echo "os patch rev: ${OS_PATCH_REV}" && apt-get update && apt-get upgrade -y
 
-# 4. Install required packages
-# Added 'gnupg' and 'software-properties-common' for secure key handling
-# Changed 'netcat' to 'netcat-openbsd' for better stability
-RUN apt-get update && apt-get install -y \
+# 4. Install required packages. --no-install-recommends matters: python3-pip's
+# recommends pulled in gcc, g++ and the Python headers. netcat is used by the base
+# image's svc-kasmvnc; xvfb gives the template bake a display.
+RUN apt-get update && apt-get install -y --no-install-recommends \
   dos2unix \
-  python3-pip \
   wget \
   python3-pyxdg \
   netcat-openbsd \
   gnupg \
-  software-properties-common \
   xvfb
-# The Linux pip is never used after this layer (app deps install into Wine's
-# Python), so it stays Debian's: upgrading it vendored urllib3 2.7.0
-# (CVE-2026-97687/-97689) into the image for nothing.
 
 # 5. MODERN WineHQ Key Handling (apt-key is deprecated)
 # This downloads the key, de-armors it, and places it in a dedicated keyring
@@ -46,7 +48,6 @@ RUN mkdir -p /etc/apt/keyrings && \
 # 6. Add i386 architecture and install Wine 10.0. The KasmVNC base includes
 # development/host utilities that this runtime never invokes; remove them to
 # reduce both the attack surface and published image.
-ARG WINE_LAYER_REV=1
 RUN test -n "$WINE_LAYER_REV" && \
   printf '%s\n' "$WINE_LAYER_REV" > /etc/mt5-gateway-wine-layer-rev && \
   dpkg --add-architecture i386 && \
@@ -68,19 +69,49 @@ RUN test -n "$WINE_LAYER_REV" && \
     overrides.brace-expansion=1.1.20 \
     'overrides[engine.io]=6.6.10' \
     overrides.proxy-addr=2.0.8 \
+    overrides.body-parser=1.20.9 \
   && npm install --omit=dev --ignore-scripts \
   && cd / \
-  && rm -rf /usr/lib/node_modules/npm \
-    /usr/bin/docker /usr/bin/docker-proxy /usr/bin/dockerd \
-    /usr/libexec/docker/cli-plugins/docker-buildx \
-    /usr/libexec/docker/cli-plugins/docker-compose \
+  && apt-get purge -y docker-ce docker-ce-cli docker-buildx-plugin docker-compose-plugin containerd.io locales-all \
+  && sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+  && locale-gen \
+  && rm -rf /usr/lib/node_modules/npm /usr/include/node \
     /usr/sbin/ipp-usb \
     /etc/ssl/private/ssl-cert-snakeoil.key \
   && apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man
+
+# Flatten: a plain layer cannot reclaim what lower layers hold, so the deletions and
+# the rewrites from `apt-get upgrade` above only shrink the image once the system is
+# copied into a single layer. FROM scratch drops the base image's config, so all of it
+# is restated here; tests/test_image_variants.py pins this list.
+FROM scratch AS system
+COPY --from=base / /
+ENV PATH=/lsiopy/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV HOME=/config
+ENV LANGUAGE=en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV TERM=xterm
+ENV S6_CMD_WAIT_FOR_SERVICES_MAXTIME=0
+ENV S6_VERBOSITY=1
+ENV S6_STAGE2_HOOK=/docker-mods
+ENV VIRTUAL_ENV=/lsiopy
+ENV DISPLAY=:0
+ENV PERL5LIB=/usr/local/bin
+ENV OMP_WAIT_POLICY=PASSIVE
+ENV GOMP_SPINCOUNT=0
+ENV START_DOCKER=false
+ENV PULSE_RUNTIME_PATH=/defaults
+ENV NVIDIA_DRIVER_CAPABILITIES=all
+ENV TITLE=MetaTrader
+ENV WINEARCH=win64
+ENV WINEPREFIX=/config/.wine
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+ENTRYPOINT ["/init"]
+EXPOSE 3001
 
 # Stage 2: Final image
-FROM base
+FROM system
 
 # Copy runtime files and scripts
 COPY VERSION /VERSION
@@ -97,7 +128,7 @@ RUN touch /var/log/mt5_setup.log && \
   chown abc:abc /var/log/mt5_setup.log && \
   chmod 644 /var/log/mt5_setup.log
 
-# Pre-install the Wine components (Mono, Python, the MT5 Python libs, and the
+# Pre-install the Wine components (Python, the MT5 Python libs, and the
 # MT5 terminal itself) into a template prefix baked into the image. WINEPREFIX is
 # the /config volume, which shadows anything built into it, so a fresh volume
 # would otherwise re-install all of this (~10 min) on every first boot. The boot
@@ -110,74 +141,25 @@ ENV WINE_TEMPLATE=/opt/wine-template
 COPY app/requirements.txt /tmp/requirements.txt
 RUN mkdir -p "$WINE_TEMPLATE" && chown -R abc:abc "$WINE_TEMPLATE"
 USER abc
-# The Python installer needs an X display even in /quiet mode, and there is none
-# during `docker build`, so run the installs under a virtual framebuffer (Xvfb).
-RUN set -eux; \
-  export HOME="$WINE_TEMPLATE" WINEPREFIX="$WINE_TEMPLATE" WINEARCH=win64 \
-    WINEDEBUG=-all WINEDLLOVERRIDES=mscoree=d DISPLAY=:99; \
-  Xvfb :99 -screen 0 1024x768x16 >/dev/null 2>&1 & xvfb_pid=$!; sleep 2; \
-  wineboot -i; wineserver -w; \
-  wget -qO /tmp/mono.msi https://dl.winehq.org/wine/wine-mono/8.0.0/wine-mono-8.0.0-x86.msi; \
-  printf '%s  %s\n' 75b3f45dca1dc89857fe9e932da78710f64cc6d49ef1ab0c723a177085b4711b /tmp/mono.msi | sha256sum -c -; \
-  wine msiexec /i /tmp/mono.msi /qn; wineserver -w; \
-  wget -qO /tmp/python.exe https://www.python.org/ftp/python/3.9.13/python-3.9.13-amd64.exe; \
-  printf '%s  %s\n' fb3d0466f3754752ca7fd839a09ffe53375ff2c981279fd4bc23a005458f7f5d /tmp/python.exe | sha256sum -c -; \
-  wine /tmp/python.exe /quiet InstallAllUsers=1 PrependPath=1 Include_test=0; wineserver -w; \
-  wine python -m pip install --no-cache-dir --upgrade pip 'setuptools>=78.1.1'; wineserver -w; \
-  wine python -m pip install --no-cache-dir -r /tmp/requirements.txt; wineserver -w; \
-  kill "$xvfb_pid" 2>/dev/null || true; \
-  rm -f /tmp/mono.msi /tmp/python.exe
+RUN /scripts/bake-wine-template.sh runtime
 
-# Bake the MT5 terminal into the template as well. The MetaQuotes web installer
-# is a GUI app and its silent /auto mode can spin forever under Wine, so running
-# it on every cold boot (fresh volume) is the flaky step — run it once here,
-# under Xvfb with the same timeout+retry watchdog as the runtime fallback, and
-# the boot just copies the result out of the template. MetaQuotes rotates the
-# stub installer, so its checksum is pinned at build time: a rotation fails the
-# build loudly (re-pin both here and mt5setup_sha256 in scripts/02-common.sh)
-# instead of failing every cold boot at runtime.
+# Bake the MT5 terminal into the template as well, so a cold boot only copies it.
+# These two pins apply when MT5_TERMINAL_SOURCE below is emptied to use the web
+# installer. MetaQuotes rotates that stub, so its checksum is pinned: a rotation
+# fails the build loudly (re-pin here, in Dockerfile.headless and mt5setup_sha256
+# in scripts/02-common.sh).
 ARG MT5_SETUP_URL=https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe
 ARG MT5_SETUP_SHA256=a879492dd9d7b168d0538edd1c0dc5604ca43dc0951825b3501818e8b18f4c93
 # Referenced by the RUN below so release CI can bust just this layer's cache
-# (docker.yml passes the commit sha) and bake the freshest terminal per release,
-# while PR builds keep the default and stay cache-hit (mirrors WINE_LAYER_REV).
+# (docker.yml passes the commit sha), while PR builds keep the default and stay
+# cache-hit (mirrors WINE_LAYER_REV).
 ARG MT5_LAYER_REV=1
-RUN set -eux; \
-  test -n "$MT5_LAYER_REV"; \
-  export HOME="$WINE_TEMPLATE" WINEPREFIX="$WINE_TEMPLATE" WINEARCH=win64 \
-    WINEDEBUG=-all WINEDLLOVERRIDES=mscoree=d DISPLAY=:99; \
-  Xvfb :99 -screen 0 1024x768x16 >/dev/null 2>&1 & xvfb_pid=$!; sleep 2; \
-  wget -qO /tmp/mt5setup.exe "$MT5_SETUP_URL"; \
-  printf '%s  %s\n' "$MT5_SETUP_SHA256" /tmp/mt5setup.exe | sha256sum -c -; \
-  wine reg add "HKEY_CURRENT_USER\\Software\\Wine" /v Version /t REG_SZ /d "win10" /f; \
-  terminal="$WINE_TEMPLATE/drive_c/Program Files/MetaTrader 5/terminal64.exe"; \
-  attempt=0; status=0; \
-  echo "mt5 install: build space before install: $(df -Pk "$WINE_TEMPLATE" | awk 'NR==2 {print $4 " KiB free on " $6}')"; \
-  while [ ! -f "$terminal" ] && [ "$attempt" -lt 3 ]; do \
-    attempt=$((attempt + 1)); \
-    status=0; timeout 600 wine /tmp/mt5setup.exe /auto || status=$?; \
-    case "$status" in \
-      0) note="clean exit" ;; \
-      124) note="killed by the 600s timeout" ;; \
-      *) note="non-zero exit; the MT5 installer does this even on a good install, so the terminal check below decides" ;; \
-    esac; \
-    echo "mt5 install: attempt $attempt: exit=$status ($note)"; \
-    [ -f "$terminal" ] || wineserver -k || true; \
-  done; \
-  if [ ! -f "$terminal" ]; then \
-    echo "mt5 install: FAILED after $attempt attempt(s), last exit=$status; no terminal64.exe" >&2; \
-    echo "mt5 install: space now: $(df -Pk "$WINE_TEMPLATE" | awk 'NR==2 {print $4 " KiB free on " $6}')" >&2; \
-    echo "mt5 install: a starved build filesystem is the usual cause; several GiB are needed here" >&2; \
-    exit 1; \
-  fi; \
-  echo "mt5 install: terminal64.exe present after $attempt attempt(s), last exit=$status"; \
-  printf 'mt5_setup_url=%s\nmt5_setup_sha256=%s\ninstalled_at=%s\nterminal_build=%s\n' \
-    "$MT5_SETUP_URL" "$MT5_SETUP_SHA256" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    "$(python3 /scripts/mt5-terminal-build.py "$terminal")" \
-    > "$WINE_TEMPLATE/.mt5-install-info"; \
-  wineserver -k 2>/dev/null || true; \
-  kill "$xvfb_pid" 2>/dev/null || true; \
-  rm -f /tmp/mt5setup.exe
+# Set to 0 only to debug a build; a release must never ship an unverified terminal.
+ARG MT5_VERIFY_TERMINAL=1
+# Empty runs the installer above instead of copying the pinned terminal.
+ARG MT5_TERMINAL_SOURCE="/mnt/terminal/Program Files/MetaTrader 5"
+RUN --mount=type=bind,from=terminal-source,source=/opt/wine-template/drive_c,target=/mnt/terminal \
+  test -n "$MT5_LAYER_REV" && /scripts/bake-wine-template.sh terminal
 USER root
 
 # App code last, so editing it rebuilds in seconds (the template layer above stays

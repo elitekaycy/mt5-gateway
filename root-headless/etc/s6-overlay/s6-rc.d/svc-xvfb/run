@@ -1,0 +1,8 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# The virtual display the terminal draws on, in place of the VNC image's Xvnc.
+set -euo pipefail
+
+mkdir -p /tmp/.X11-unix
+chmod 1777 /tmp/.X11-unix
+exec s6-setuidgid abc Xvfb "$DISPLAY" -screen 0 1280x1024x24 -nolisten tcp

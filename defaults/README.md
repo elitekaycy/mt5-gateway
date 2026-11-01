@@ -14,4 +14,4 @@ docker cp <gateway>:"/config/.wine/drive_c/Program Files/MetaTrader 5/Config/ser
 ```
 
 Override at deploy time without rebuilding: mount your own at
-`/defaults/servers.dat`, or set `QKT_ARTIFACTS_TOKEN` to fetch from a private repo.
+`/defaults/servers.dat`.

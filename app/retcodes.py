@@ -40,11 +40,14 @@ _RETRYABLE = {
     10020: "PRICE_CHANGED",
     10021: "PRICE_OFF",
     10024: "TOO_MANY_REQUESTS",
-    10031: "CONNECTION",
 }
 
+# 10031 says "rejected due to absence of network connection", but it does not prove
+# that. On 2026-11-01 the broker's deal history showed closes answered with 10031
+# executing within 200 ms of the request, and others not executing at all.
 _AMBIGUOUS = {
     10012: "TIMEOUT",
+    10031: "CONNECTION",
 }
 
 _PERMANENT = {

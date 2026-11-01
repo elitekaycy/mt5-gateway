@@ -54,7 +54,8 @@ Swagger/OpenAPI UI is available at `http://localhost:5001/apidocs`. If
 ## With Docker Compose
 
 From a clone of the repository (its `docker-compose.yml` builds the image from the
-`Dockerfile`; it does not pull the published one):
+`Dockerfile`; it does not pull the published one. For the smaller image with no browser
+desktop, see [Image size & profiles](../operations/image-size.md)):
 
 ```bash
 cp .env.example .env      # then edit it — see Configuration

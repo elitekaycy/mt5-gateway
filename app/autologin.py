@@ -77,9 +77,42 @@ def render_start_ini(s: AutoLoginSettings) -> str:
         "[Experts]",
         f"AllowLiveTrading={algo_enabled}",
         f"Enabled={algo_enabled}",
-        f"Account={algo_enabled}",
+        # Account=1 means "disable algo trading when connecting with a different account".
+        # The terminal's first login can count as that, e.g. when the API logs it in after
+        # a broker outage, so it must stay 0 or every order is rejected with 10027.
+        "Account=0",
     ]
     return "\r\n".join(lines) + "\r\n"
+
+
+def persist_algo_trading(common_ini: Path, enabled: bool) -> None:
+    r"""Store the algo-trading switch in the terminal's own settings file.
+
+    ``Account`` stays 0 either way, for the reason given in ``render_start_ini``.
+    ``start.ini`` applies only to the launch that reads it and is then shredded, and a
+    killed terminal never saves its settings. The terminal the API relaunches after a
+    crash would otherwise reject every order with 10027. MT5 keeps this file as UTF-16
+    with CRLF line endings. e.g. enabled -> "[Experts]\r\nAllowLiveTrading=1\r\n...".
+    """
+    switch = "1" if enabled else "0"
+    wanted = {"AllowLiveTrading": switch, "Enabled": switch, "Account": "0"}
+    existing = common_ini.read_text(encoding="utf-16") if common_ini.exists() else ""
+    kept: list[str] = []
+    other_experts: list[str] = []
+    in_experts = False
+    for line in existing.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            in_experts = stripped.lower() == "[experts]"
+            if in_experts:
+                continue
+        if not in_experts:
+            kept.append(line)
+        elif stripped.split("=", 1)[0] not in wanted:
+            other_experts.append(line)
+    settings = [f"{key}={value}" for key, value in wanted.items()]
+    text = "\r\n".join([*kept, "[Experts]", *settings, *other_experts]) + "\r\n"
+    common_ini.write_bytes(text.encode("utf-16"))
 
 
 # The API (Wine Python) and the boot script (Linux) share these files through

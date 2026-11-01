@@ -4,9 +4,11 @@ name: docker
 # Fires when main advances (via the promote-to-main flow's explicit dispatch —
 # GITHUB_TOKEN merges don't trigger push workflows) and on manual dispatch.
 #
-# One build per release publishes every tag: `latest` (main only), the VERSION
-# file value, the `v`-prefixed form, and a `sha-<commit>` tag for precise
-# pinning. Tag pushes deliberately do NOT trigger this workflow: a second build
+# One build per release and variant publishes every tag. The VNC image (Dockerfile)
+# keeps the plain names existing deployments pull: `latest` (main only), the VERSION
+# file value, the `v`-prefixed form, and a `sha-<commit>` tag for precise pinning.
+# The API-only image (Dockerfile.headless) publishes `headless` and the same names
+# with a `-headless` suffix. Tag pushes deliberately do NOT trigger this workflow: a second build
 # of the same commit races the first and overwrites the shared tags with a
 # different digest.
 
@@ -30,6 +32,19 @@ concurrency:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    strategy:
+      # A failed headless build must not stop the image existing deployments pull.
+      fail-fast: false
+      matrix:
+        include:
+          - dockerfile: Dockerfile
+            suffix: ''
+            floating_tag: latest
+            cache_scope: mt5-gateway
+          - dockerfile: Dockerfile.headless
+            suffix: -headless
+            floating_tag: headless
+            cache_scope: mt5-gateway-headless
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
@@ -50,10 +65,10 @@ jobs:
         with:
           images: elitekaycy/mt5-gateway-api
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=${{ steps.ver.outputs.version }}
-            type=raw,value=v${{ steps.ver.outputs.version }}
-            type=sha
+            type=raw,value=${{ matrix.floating_tag }},enable={{is_default_branch}}
+            type=raw,value=${{ steps.ver.outputs.version }}${{ matrix.suffix }}
+            type=raw,value=v${{ steps.ver.outputs.version }}${{ matrix.suffix }}
+            type=sha,suffix=${{ matrix.suffix }}
 
       - name: Log in to Docker Hub
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
@@ -69,14 +84,15 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           load: true
           push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # Reuse the heavy Wine/template layers from the shared cache, but bust
-          # the MT5 layer on every release so the published image bakes the
+          # the terminal layer on every release so the published image bakes the
           # freshest terminal (PR builds keep the default MT5_LAYER_REV).
-          cache-from: type=gha,scope=mt5-gateway
+          cache-from: type=gha,scope=${{ matrix.cache_scope }}
           build-args: |
             MT5_LAYER_REV=${{ github.sha }}
             OS_PATCH_REV=${{ steps.osrev.outputs.rev }}
@@ -84,7 +100,7 @@ jobs:
       - name: Scan release candidate
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: elitekaycy/mt5-gateway-api:${{ steps.ver.outputs.version }}
+          image-ref: elitekaycy/mt5-gateway-api:${{ steps.ver.outputs.version }}${{ matrix.suffix }}
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           trivyignores: .trivyignore
@@ -96,13 +112,14 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
+          file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: mode=max
           sbom: true
-          cache-from: type=gha,scope=mt5-gateway
-          cache-to: type=gha,mode=max,scope=mt5-gateway
+          cache-from: type=gha,scope=${{ matrix.cache_scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
           build-args: |
             MT5_LAYER_REV=${{ github.sha }}
             OS_PATCH_REV=${{ steps.osrev.outputs.rev }}

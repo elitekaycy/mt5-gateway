@@ -91,27 +91,13 @@ if [ -n "${MT5_LOGIN:-}" ]; then
         cp /defaults/servers.dat "$sdat"
         chown abc:abc "$sdat" 2>/dev/null || true
         log_message "INFO" "Seeded servers.dat from /defaults ($(wc -c < "$sdat") bytes)."
-    else
-        # Opt-in fetch from a private artifacts repo. Only when the volume lacks a
-        # real directory (the MT5 install writes a tiny default), and only if a
-        # token is set — so the public image stays clean and the open VNC /
-        # user-supplied-servers.dat path is unaffected when no token is given.
-        # Writes straight into the volume, so later boots don't refetch.
-        cur=$([ -f "$sdat" ] && wc -c < "$sdat" || echo 0)
-        if [ "$cur" -lt 100000 ] && [ -n "${QKT_ARTIFACTS_TOKEN:-}" ]; then
-            repo="${QKT_ARTIFACTS_REPO:-elitekaycy/qkt-artifacts}"
-            path="${QKT_ARTIFACTS_FILE:-servers.dat}"
-            log_message "INFO" "Fetching servers.dat from private artifacts repo $repo."
-            if curl -fsSL -H "Authorization: Bearer ${QKT_ARTIFACTS_TOKEN}" \
-                    -H "Accept: application/vnd.github.raw" \
-                    "https://api.github.com/repos/${repo}/contents/${path}" -o "$sdat"; then
-                chown abc:abc "$sdat" 2>/dev/null || true
-                log_message "INFO" "Fetched servers.dat ($(wc -c < "$sdat") bytes)."
-            else
-                log_message "WARN" "servers.dat fetch failed; login may not resolve the broker."
-            fi
-        fi
     fi
+    # A terminal the API relaunches after a crash gets no start.ini, so it reads the
+    # algo-trading switch from here.
+    python3 -c "import sys, os; from pathlib import Path; sys.path.insert(0, '/app'); \
+from autologin import load_settings, persist_algo_trading; \
+persist_algo_trading(Path(sys.argv[1]), load_settings(os.environ).enable_algo_trading)" \
+        "$mt5cfg/common.ini"
     # Build the ordered connect-candidate list — baked table, then resolver
     # services, then the server name — and try each until MT5 authorizes, so a
     # stale address or an unknown broker falls through automatically. Runs in the

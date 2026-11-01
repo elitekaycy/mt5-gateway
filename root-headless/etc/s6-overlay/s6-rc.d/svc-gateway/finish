@@ -1,0 +1,5 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# s6 restarts the service when the API exits. MT5 is a single-IPC client, so stop
+# the old terminal first or the restarted API could attach to a half-dead session.
+s6-setuidgid abc timeout 4 wineserver -k 2>/dev/null || true

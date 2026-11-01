@@ -1,0 +1,17 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# Runs the same boot script the VNC image starts from its desktop session.
+set -euo pipefail
+
+socket="/tmp/.X11-unix/X${DISPLAY#:}"
+for _ in $(seq 1 60); do
+  [ -S "$socket" ] && break
+  sleep 0.5
+done
+if [ ! -S "$socket" ]; then
+  echo "[svc-gateway] display $DISPLAY did not come up" >&2
+  exit 1
+fi
+
+cd "$HOME"
+exec s6-setuidgid abc /scripts/01-start.sh

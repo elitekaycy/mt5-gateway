@@ -182,9 +182,8 @@ def test_promotion_runs_the_gate_before_building_anything():
     )
 
 
-def test_the_broker_secrets_can_never_reach_a_pull_request():
-    workflow = (ROOT / ".github" / "workflows" / "attestation.yml").read_text()
-    triggers = workflow.split("permissions:")[0]
-    assert "workflow_dispatch" in triggers
-    assert "pull_request" not in triggers.split("on:")[1]
-    assert "max-parallel: 1" in workflow
+def test_no_workflow_receives_broker_credentials():
+    for workflow in (ROOT / ".github" / "workflows").glob("*.yml"):
+        text = workflow.read_text()
+        assert "MT5_PASSWORD" not in text, workflow.name
+        assert "attestation/run.py" not in text, workflow.name

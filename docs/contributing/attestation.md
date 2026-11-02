@@ -25,20 +25,14 @@ server name and the image id, and no credentials or account number.
 `app/`, `defaults/`, `root/`, `root-headless/` and `scripts/`, so any change to those needs
 a new run. Docs, tests and a version bump do not.
 
-## Run it in CI
+## When to run it
 
-The `attestation` workflow runs the same suite on both images, by hand and every Monday, to
-catch outside changes such as a new MT5 build. It needs these repository secrets, for a demo
-account nothing else uses, because the cases count positions and restart logins:
+It runs on a machine with Docker and a demo account, not in CI, so broker credentials stay
+off GitHub. CI only checks the committed records. Use a login nothing else is trading on,
+because the cases count positions and restart logins.
 
-```bash
-gh secret set MT5_ATTEST_LOGIN --repo elitekaycy/mt5-gateway
-gh secret set MT5_ATTEST_PASSWORD --repo elitekaycy/mt5-gateway
-gh secret set MT5_ATTEST_SERVER --repo elitekaycy/mt5-gateway
-```
-
-Set the `MT5_ATTEST_SYMBOL` variable if the account's symbols differ from `BTCUSDm`. The workflow
-does not write a record: `promote-to-main` still needs one committed from a run with `--record`.
+Run it for any change to the hashed paths above, and again when bumping the terminal, Wine or
+the base image.
 
 ## What it covers
 

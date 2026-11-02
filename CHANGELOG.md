@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-02
+
 ### Added
 
 - A headless image (`headless`, `X.Y.Z-headless`) with no browser desktop. It uses the same
@@ -16,6 +18,9 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 - The VNC image is much smaller, and keeps its tags and desktop.
 - Both images bake MT5 build 6244, pinned, rather than the newest build.
+
+- The image health check allows 10 minutes for a first login, because a busy host could mark a
+  healthy boot as failed. Compose stacks that set their own `start_period` keep it.
 
 ### Removed
 

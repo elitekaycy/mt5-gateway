@@ -168,7 +168,7 @@ COPY app /app
 
 EXPOSE 3000 5001
 VOLUME /config
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
   CMD if [ -n "$API_KEY" ]; then \
     curl -fsS -H "Authorization: Bearer $API_KEY" http://localhost:5001/health/ready; \
   else \

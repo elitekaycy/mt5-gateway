@@ -46,7 +46,7 @@ RECOVERY_CASES = (
     "recovery_stop_is_graceful",
 )
 
-FINAL_CASES = ("surface_terminal_did_not_change",)
+FINAL_CASES = ("surface_terminal_did_not_change", "final_account_is_flat")
 
 # Every route, and the case that drives it against a real broker. A route added to the
 # app without an entry here fails tests/test_attestation.py.

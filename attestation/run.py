@@ -1130,7 +1130,9 @@ def run_all(run: Run) -> None:
             "surface_terminal_did_not_change",
             lambda d: surface_terminal_did_not_change(run, gw, d),
         )
-        _timed(run, "final_account_is_flat", lambda d: final_account_is_flat(run, gw, d))
+        _timed(
+            run, "final_account_is_flat", lambda d: final_account_is_flat(run, gw, d)
+        )
 
 
 def main() -> int:

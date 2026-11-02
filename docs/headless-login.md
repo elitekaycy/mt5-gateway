@@ -71,14 +71,16 @@ template (`/opt/wine-template`), under a virtual display with the same
 timeout+retry watchdog the runtime installer used. A cold boot therefore never
 runs the GUI installer — it copies the terminal out of the template together
 with Mono/Python, then goes straight to login. What was baked is recorded in
-`/config/.wine/.mt5-install-info` (stub URL + checksum, install date, terminal
+`/config/.wine/.mt5-install-info` (terminal source, install date, terminal
 build).
 
-MetaQuotes rotates the stub installer, so its SHA-256 is pinned in two places
-that must move together: `ARG MT5_SETUP_SHA256` in the `Dockerfile` (build-time
-install) and `mt5setup_sha256` in `scripts/02-common.sh` (runtime fallback for
-volumes created before the template included MT5). A rotation fails the build
-loudly — re-pin both.
+The images bake a pinned terminal build rather than the newest one; see
+[Image size & profiles](operations/image-size.md). MetaQuotes rotates the stub
+installer used when that pin is emptied, so its SHA-256 is pinned in three places
+that must move together: `ARG MT5_SETUP_SHA256` in `Dockerfile` and
+`Dockerfile.headless` (build-time install), and `mt5setup_sha256` in
+`scripts/02-common.sh` (runtime fallback for volumes created before the template
+included MT5). A rotation fails the build loudly — re-pin all three.
 
 ## Tuning knobs (all optional)
 
@@ -97,8 +99,7 @@ Still baked into the image (~728 KB, major brokers) as an offline fallback for
 name-based login, but it is **no longer required** for headless login — the resolver
 covers brokers it doesn't list, and MT5 self-seeds the directory on first connect.
 
-Override without rebuilding: mount your own at `/defaults/servers.dat`, or set
-`QKT_ARTIFACTS_TOKEN` to fetch it from a private repo on first boot.
+Override without rebuilding: mount your own at `/defaults/servers.dat`.
 
 ## Verify
 

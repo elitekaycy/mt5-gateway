@@ -55,7 +55,7 @@ Server=Exness-MT5Trial9
 [Experts]
 AllowLiveTrading=1
 Enabled=1
-Account=1
+Account=0
 ```
 
 The `[Experts]` block is what `MT5_ENABLE_ALGO_TRADING` controls — set it to

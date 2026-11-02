@@ -1,0 +1,40 @@
+# The API-only image: no browser desktop, so only the API port. Same volume and settings as
+# docker-compose.yml, and the same ./config moves between the two.
+#   docker compose -f docker-compose.headless.yml up -d --build
+services:
+  mt5:
+    build:
+      dockerfile: Dockerfile.headless
+    container_name: mt5-gateway
+    volumes:
+      - ./config:/config
+    env_file:
+      - .env
+    environment:
+      MT5_LOGIN: ${MT5_LOGIN:-}
+      MT5_PASSWORD: ${MT5_PASSWORD:-}
+      MT5_SERVER: ${MT5_SERVER:-}
+      MT5_SERVER_ADDR: ${MT5_SERVER_ADDR:-}
+      MT5_RESOLVER_URL: ${MT5_RESOLVER_URL:-https://mt5.mtapi.io}
+      MT5_ENABLE_ALGO_TRADING: ${MT5_ENABLE_ALGO_TRADING:-1}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5001:5001"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'if [ -n "$$API_KEY" ]; then curl -fsS -H "Authorization: Bearer $$API_KEY" http://localhost:5001/health/ready; else curl -fsS http://localhost:5001/health/ready; fi',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 600s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G

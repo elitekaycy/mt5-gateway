@@ -14,13 +14,20 @@ def test_success_retcodes(retcode, state):
     assert success_state(retcode) == state
 
 
-@pytest.mark.parametrize("retcode", [10004, 10020, 10021, 10024, 10031])
+@pytest.mark.parametrize("retcode", [10004, 10020, 10021, 10024])
 def test_retryable_retcodes(retcode):
     assert classify_retcode(retcode).is_retryable
 
 
 def test_timeout_is_ambiguous():
     assert classify_retcode(10012).is_ambiguous
+
+
+def test_no_connection_is_ambiguous_because_the_broker_can_still_execute():
+    info = classify_retcode(10031)
+
+    assert info.is_ambiguous
+    assert not info.is_retryable
 
 
 @pytest.mark.parametrize("retcode", [10018, 10019, 10030])

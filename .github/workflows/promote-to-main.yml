@@ -55,6 +55,12 @@ jobs:
           echo "::error::timed out waiting for check on dev $sha"
           exit 1
 
+      # Real-broker results cannot run here: they need a demo account and a machine that
+      # can run the terminal. A maintainer commits them, and this checks they cover
+      # exactly the code being promoted.
+      - name: Require MT5 attestation for this source
+        run: python3 attestation/verify.py
+
       - name: Guard version and tag
         run: |
           set -e

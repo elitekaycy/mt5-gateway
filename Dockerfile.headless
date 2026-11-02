@@ -1,0 +1,100 @@
+# API-only gateway image: the MT5 terminal under Wine on a virtual display, with
+# no browser desktop. Same API, same /config volume layout and same uid as the
+# VNC image (Dockerfile), so a volume moves between the two in either direction.
+# Published as the `headless` and `<version>-headless` tags.
+# The terminal both images bake. The MetaQuotes installer only serves the newest build, and
+# builds from 6274 on stop under Wine 10 with a false "debugger has been found" dialog (see
+# docs/operations/image-size.md), so this takes build 6244 from a published image of ours.
+FROM elitekaycy/mt5-gateway-api:0.3.19@sha256:28042a654f344edab30c7ef664e0b2f19e59134fb21c300e000809c0d93a37d1 AS terminal-source
+
+FROM ghcr.io/linuxserver/baseimage-debian:bookworm@sha256:2b0f552bc851069943bca11a6953392baff608eafa2465e30820fc2456e39ab5
+
+ENV TITLE=MetaTrader
+ENV HOME=/config
+ENV WINEARCH=win64
+ENV WINEPREFIX="/config/.wine"
+ENV DISPLAY=:0
+ENV WINE_TEMPLATE=/opt/wine-template
+
+# OS_PATCH_REV changes daily in the release build; see the note in Dockerfile.
+ARG OS_PATCH_REV=0
+# Wine's Recommends pull in hundreds of desktop packages, so it is installed
+# without them and with only the libraries it loads for a terminal session, in
+# both architectures: the MT5 web installer and Wine's start.exe are 32-bit.
+# scripts/test-image-variant.sh boots this image and logs in, which is what
+# proves the list is enough.
+RUN set -eux; \
+  echo "os patch rev: ${OS_PATCH_REV}"; \
+  dpkg --add-architecture i386; \
+  apt-get update; \
+  apt-get upgrade -y; \
+  apt-get install -y --no-install-recommends ca-certificates curl gnupg locales python3 procps wget xvfb; \
+  sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen; \
+  locale-gen; \
+  mkdir -p /etc/apt/keyrings; \
+  wget -qO- https://dl.winehq.org/wine-builds/winehq.key | gpg --dearmor -o /etc/apt/keyrings/winehq.gpg; \
+  echo "deb [signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/debian/ bookworm main" > /etc/apt/sources.list.d/winehq.list; \
+  apt-get update; \
+  apt-get install -y --no-install-recommends \
+    winehq-stable=10.0.0.0~bookworm-1 \
+    wine-stable=10.0.0.0~bookworm-1 \
+    wine-stable-amd64=10.0.0.0~bookworm-1 \
+    wine-stable-i386=10.0.0.0~bookworm-1 \
+    libdbus-1-3 libdbus-1-3:i386 \
+    libfontconfig1 libfontconfig1:i386 \
+    libfreetype6 libfreetype6:i386 \
+    libgnutls30 libgnutls30:i386 \
+    libgssapi-krb5-2 libgssapi-krb5-2:i386 \
+    libkrb5-3 libkrb5-3:i386 \
+    libpng16-16 libpng16-16:i386 \
+    libxcomposite1 libxcomposite1:i386 \
+    libxcursor1 libxcursor1:i386 \
+    libxfixes3 libxfixes3:i386 \
+    libxi6 libxi6:i386 \
+    libxinerama1 libxinerama1:i386 \
+    libxrandr2 libxrandr2:i386 \
+    libxrender1 libxrender1:i386 \
+    libxxf86vm1 libxxf86vm1:i386; \
+  apt-mark hold winehq-stable wine-stable wine-stable-amd64 wine-stable-i386; \
+  apt-get purge -y --auto-remove gnupg; \
+  apt-get clean; \
+  rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man
+
+COPY VERSION /VERSION
+COPY defaults/ /defaults/
+COPY scripts /scripts
+RUN sed -i 's/\r$//' /scripts/*.sh && chmod +x /scripts/*.sh
+
+COPY root/custom-cont-init.d /custom-cont-init.d
+COPY root-headless/ /
+RUN touch /var/log/mt5_setup.log && \
+  chown abc:abc /var/log/mt5_setup.log && \
+  chmod 644 /var/log/mt5_setup.log
+
+COPY app/requirements.txt /tmp/requirements.txt
+RUN mkdir -p /config/.wine "$WINE_TEMPLATE" && chown -R abc:abc /config/.wine "$WINE_TEMPLATE"
+USER abc
+RUN /scripts/bake-wine-template.sh runtime
+
+ARG MT5_SETUP_URL=https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe
+ARG MT5_SETUP_SHA256=a879492dd9d7b168d0538edd1c0dc5604ca43dc0951825b3501818e8b18f4c93
+# Release CI passes the commit sha, which rebuilds this layer on each release.
+ARG MT5_LAYER_REV=1
+# Set to 0 only to debug a build; a release must never ship an unverified terminal.
+ARG MT5_VERIFY_TERMINAL=1
+# Empty runs the installer above instead of copying the pinned terminal.
+ARG MT5_TERMINAL_SOURCE="/mnt/terminal/Program Files/MetaTrader 5"
+RUN --mount=type=bind,from=terminal-source,source=/opt/wine-template/drive_c,target=/mnt/terminal \
+  test -n "$MT5_LAYER_REV" && /scripts/bake-wine-template.sh terminal
+USER root
+
+COPY app /app
+
+EXPOSE 5001
+VOLUME /config
+HEALTHCHECK --interval=30s --timeout=10s --start-period=600s --retries=3 \
+  CMD if [ -n "$API_KEY" ]; then \
+    curl -fsS -H "Authorization: Bearer $API_KEY" http://localhost:5001/health/ready; \
+  else \
+    curl -fsS http://localhost:5001/health/ready; \
+  fi

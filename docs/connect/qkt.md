@@ -43,7 +43,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 90s
+      start_period: 600s
 
   qkt:
     image: elitekaycy/qkt:latest

@@ -17,7 +17,7 @@ attestation/run.py --image mt5-gateway:headless --variant headless --env-file de
 attestation/run.py --image mt5-gateway:vnc --variant vnc --env-file demo.env --record
 ```
 
-Each run takes about 25 minutes. A full pass writes a record to `attestation/records/`.
+Each run takes about 40 minutes, including 12 minutes at the end watching for late fills. A full pass writes a record to `attestation/records/`.
 Commit both records on the branch going to `dev`. Records hold the results, the broker
 server name and the image id, and no credentials or account number.
 
@@ -44,6 +44,7 @@ the base image.
 | Security | API key, kill switch, no password left in logs or on the volume |
 | Recovery | Restart, terminal crash, API crash (headless), network loss with an open position, graceful stop |
 | Terminal | The running build still matches the baked build after every login and order |
+| Late fills | The whole account ends flat after a watch. Late fills are closed and counted in the record |
 
 ## What it does not cover
 

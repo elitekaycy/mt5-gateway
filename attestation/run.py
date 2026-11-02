@@ -45,6 +45,9 @@ READY_TIMEOUT_S = 300
 RECOVERY_TIMEOUT_S = 300
 RECONCILE_S = 8
 UNCLEAR_RETRY_S = 120
+LATE_FILL_POLL_S = 5
+OFFSET_WAIT_S = 60
+HISTORY_WAIT_S = 60
 TERMINAL_DIR = "/config/.wine/drive_c/Program Files/MetaTrader 5"
 START_INI = "/config/.wine/drive_c/start.ini"
 
@@ -219,6 +222,8 @@ class Run:
         self.empty_table.write_text("{}")
         self.unclear = {"order_executed": 0, "order_not_executed": 0}
         self.unclear |= {"close_executed": 0, "close_not_executed": 0}
+        self.unclear["late_fills"] = 0
+        self.issued: set[int] = set()
         self.results: dict[str, dict[str, Any]] = {}
 
     def gateway(self, **kwargs: Any) -> Gateway:
@@ -228,7 +233,9 @@ class Run:
         return (f"{self.empty}:/defaults/servers.dat:ro",)
 
     def magic(self) -> int:
-        return 700000 + uuid.uuid4().int % 99999
+        magic = 700000 + uuid.uuid4().int % 99999
+        self.issued.add(magic)
+        return magic
 
     def positions(self, gw: Gateway, magic: int) -> list[dict[str, Any]]:
         status, body = gw.get(f"/get_positions?magic={magic}")
@@ -518,6 +525,12 @@ def api_every_read_route(run: Run, gw: Gateway, detail: dict[str, Any]) -> None:
         f"/history_deals_range?{range_query}",
     ):
         status, body = gw.get(path)
+        # A new session's terminal downloads bars in the background, and answers 404 until then.
+        deadline = time.monotonic() + HISTORY_WAIT_S
+        while status == 404 and "/fetch_data" in path and time.monotonic() < deadline:
+            detail["history_waits"] = detail.get("history_waits", 0) + 1
+            time.sleep(2)
+            status, body = gw.get(path)
         expect(status == 200, f"GET {path} returned {status}: {str(body)[:200]}")
     tick = run.tick(gw)
     expect(float(tick["ask"]) >= float(tick["bid"]) > 0, f"bad tick: {tick}")
@@ -635,6 +648,20 @@ def api_close_all_only_touches_its_magic(
         run.flatten(gw, other)
 
 
+def _place_when_offset_known(
+    gw: Gateway, body: dict[str, Any], detail: dict[str, Any]
+) -> tuple[int, Any]:
+    """A GTD order is refused, placing nothing, until a quote moves and proves the offset."""
+    deadline = time.monotonic() + OFFSET_WAIT_S
+    while True:
+        status, reply = gw.post("/order", body)
+        waiting = status == 400 and "broker UTC offset unknown" in str(reply)
+        if not waiting or time.monotonic() >= deadline:
+            return status, reply
+        detail["offset_refusals"] = detail.get("offset_refusals", 0) + 1
+        time.sleep(2)
+
+
 def api_pending_lifecycle(run: Run, gw: Gateway, detail: dict[str, Any]) -> None:
     """Limit and stop orders, GTD expiry, modification and cancel, from broker truth."""
     distance = _pip_distance(run, gw)
@@ -660,7 +687,7 @@ def api_pending_lifecycle(run: Run, gw: Gateway, detail: dict[str, Any]) -> None
             }
             if expiration:
                 body["expiration"] = expiration
-            status, reply = gw.post("/order", body)
+            status, reply = _place_when_offset_known(gw, body, detail)
             expect(status == 200, f"{kind} returned {status}: {reply}")
             orders = run.pending(gw, magic)
             expect(len(orders) == 1, f"{kind}: broker has {orders}")
@@ -1030,6 +1057,30 @@ def surface_terminal_did_not_change(
     )
 
 
+def final_account_is_flat(run: Run, gw: Gateway, detail: dict[str, Any]) -> None:
+    """Orders answered unclearly can fill long after the reply, so watch before leaving."""
+    deadline = time.monotonic() + run.args.late_fill_watch
+    late: set[int] = set()
+    while True:
+        status, body = gw.get("/get_positions")
+        expect(status in (200, 404), f"/get_positions returned {status}: {body}")
+        positions = rows(body, "positions")
+        foreign = [p["ticket"] for p in positions if p.get("magic") not in run.issued]
+        expect(not foreign, f"positions this run did not open: {foreign}")
+        for position in positions:
+            late.add(position["ticket"])
+            gw.post("/close_position", {"position": {"ticket": position["ticket"]}})
+        if time.monotonic() >= deadline and not positions:
+            break
+        expect(
+            time.monotonic() < deadline + UNCLEAR_RETRY_S,
+            f"positions still open after the watch: {positions}",
+        )
+        time.sleep(LATE_FILL_POLL_S)
+    run.unclear["late_fills"] = len(late)
+    detail["late_fills"] = sorted(late)
+
+
 # ---- runner ----
 
 ALL: dict[str, Callable[..., None]] = {
@@ -1079,6 +1130,7 @@ def run_all(run: Run) -> None:
             "surface_terminal_did_not_change",
             lambda d: surface_terminal_did_not_change(run, gw, d),
         )
+        _timed(run, "final_account_is_flat", lambda d: final_account_is_flat(run, gw, d))
 
 
 def main() -> int:
@@ -1091,6 +1143,12 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=15001)
     parser.add_argument(
         "--boots", type=int, default=5, help="repeats of the fresh boot case"
+    )
+    parser.add_argument(
+        "--late-fill-watch",
+        type=int,
+        default=720,
+        help="seconds to watch for late fills at the end",
     )
     parser.add_argument(
         "--only", nargs="*", help="run only cases with these name parts"

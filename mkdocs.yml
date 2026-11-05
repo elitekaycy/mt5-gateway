@@ -15,6 +15,7 @@ exclude_docs: |
 
 theme:
   name: material
+  custom_dir: overrides
   logo: assets/logo-icon.svg
   icon:
     repo: fontawesome/brands/github
@@ -25,6 +26,7 @@ theme:
       primary: black
       accent: green
   features:
+    - announce.dismiss
     - navigation.tabs
     - navigation.sections
     - navigation.indexes
@@ -103,4 +105,7 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/elitekaycy/mt5-gateway
+    - icon: octicons/heart-fill-16
+      link: https://github.com/sponsors/elitekaycy
+      name: Sponsor qkt
   generator: false

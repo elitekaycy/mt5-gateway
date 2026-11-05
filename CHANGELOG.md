@@ -4,6 +4,13 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-05
+
+### Documentation
+
+- The docs site shows a sponsor bar (readers can close it) and a footer link to GitHub Sponsors. No
+  code changes.
+
 ## [0.4.0] - 2026-11-02
 
 ### Added
